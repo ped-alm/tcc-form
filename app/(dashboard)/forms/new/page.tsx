@@ -28,7 +28,7 @@ export default async function NewFormPage() {
     title: 'Untitled Form',
     slug: slug,
     status: 'draft',
-    theme: 'minimal',
+    theme: 'ocean',
     questions: [],
     thank_you_message: 'Thank you for your response!',
   }

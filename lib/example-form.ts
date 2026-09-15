@@ -76,7 +76,7 @@ export const exampleForm: Form = {
   description: 'Uma pesquisa rápida de opinião sobre o filme.',
   slug: EXAMPLE_FORM_SLUG,
   status: 'published',
-  theme: 'midnight',
+  theme: 'ocean',
   questions: exampleFormQuestions,
   thank_you_message: 'Obrigado por avaliar o filme!',
   created_at: '2026-01-01T00:00:00.000Z',

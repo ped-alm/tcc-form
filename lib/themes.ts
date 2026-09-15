@@ -60,7 +60,7 @@ export const themes: Record<ThemePreset, ThemeConfig> = {
 export const themeList = Object.values(themes)
 
 export function getTheme(preset: ThemePreset): ThemeConfig {
-  return themes[preset] || themes.minimal
+  return themes[preset] || themes.ocean
 }
 
 // Generate CSS variables from theme

@@ -2,12 +2,18 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Form, QuestionConfig, Json } from '@/lib/database.types'
-import { getTheme, getThemeCSSVariables } from '@/lib/themes'
+import { Form, QuestionConfig, Json, ThemePreset } from '@/lib/database.types'
+import { getTheme, getThemeCSSVariables, themeList } from '@/lib/themes'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
-import { ChevronUp, ChevronDown, Check, ArrowRight } from 'lucide-react'
+import { ChevronUp, ChevronDown, Check, ArrowRight, Palette } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { QuestionRenderer } from './question-renderer'
 import { toast } from 'sonner'
 
@@ -18,8 +24,15 @@ interface FormPlayerProps {
 export function FormPlayer({ form }: FormPlayerProps) {
   const supabase = createClient()
   const questions = (form.questions as QuestionConfig[]) || []
-  const theme = getTheme(form.theme)
+  const [currentThemePreset, setCurrentThemePreset] = useState<ThemePreset>(form.theme || 'ocean')
+  const theme = getTheme(currentThemePreset)
   const themeStyles = getThemeCSSVariables(theme)
+
+  useEffect(() => {
+    if (form.theme) {
+      setCurrentThemePreset(form.theme)
+    }
+  }, [form.theme])
 
   const [currentIndex, setCurrentIndex] = useState(0)
   const [answers, setAnswers] = useState<Record<string, Json>>({})
@@ -462,7 +475,7 @@ export function FormPlayer({ form }: FormPlayerProps) {
       </main>
 
       {/* Navigation footer */}
-      <footer className="fixed bottom-0 left-0 right-0 p-4 flex items-center justify-between">
+      <footer className="fixed bottom-0 left-0 right-0 p-4 flex items-center justify-between z-40">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -484,6 +497,77 @@ export function FormPlayer({ form }: FormPlayerProps) {
           >
             <ChevronDown className="w-5 h-5" />
           </Button>
+
+          {/* Theme switcher button
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-10 px-3 flex items-center gap-2 rounded-lg border border-transparent hover:border-black/10 dark:hover:border-white/10"
+                style={{ color: theme.textColor }}
+                aria-label="Change theme"
+              >
+                <Palette className="w-4 h-4" />
+                <span className="text-xs font-medium">{theme.name}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="start" className="w-44 p-1.5 shadow-xl bg-white text-slate-900 border border-slate-200">
+              <div className="px-2 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                Select Theme
+              </div>
+              {themeList.map((t) => (
+                <DropdownMenuItem
+                  key={t.id}
+                  onClick={() => setCurrentThemePreset(t.id)}
+                  className="flex items-center justify-between cursor-pointer py-1.5 px-2 rounded text-xs hover:bg-slate-100"
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="w-3.5 h-3.5 rounded-full border border-slate-300 shrink-0 flex items-center justify-center overflow-hidden"
+                      style={{ backgroundColor: t.backgroundColor }}
+                    >
+                      <span
+                        className="w-1.5 h-1.5 rounded-full"
+                        style={{ backgroundColor: t.primaryColor }}
+                      />
+                    </span>
+                    <span>{t.name}</span>
+                  </div>
+                  {t.id === currentThemePreset && (
+                    <Check className="w-3.5 h-3.5 text-blue-600 ml-2" />
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          */}
+        </div>
+
+        {/* Progress bar with percentage */}
+        <div 
+          className="flex items-center gap-2 sm:gap-3"
+          aria-label={`Progress: ${Math.round(progress)}% completed`}
+          title={`${Math.round(progress)}% completed`}
+        >
+          <div className="w-24 sm:w-36 md:w-48">
+            <Progress 
+              value={progress} 
+              className="h-2 rounded-full"
+              style={{ 
+                backgroundColor: `${theme.primaryColor}25`,
+              }}
+              indicatorStyle={{
+                backgroundColor: theme.primaryColor,
+              }}
+            />
+          </div>
+          <span 
+            className="text-xs sm:text-sm font-medium tabular-nums"
+            style={{ color: theme.textColor }}
+          >
+            {Math.round(progress)}%
+          </span>
         </div>
 
         {/* OpenForm branding */}
