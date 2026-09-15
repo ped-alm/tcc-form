@@ -5,7 +5,7 @@ import { QuestionConfig, ThemeConfig, Json } from '@/lib/database.types'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { motion } from 'framer-motion'
-import { Star, Upload, Check, X, FileText, Image as ImageIcon, Loader2, AlertCircle } from 'lucide-react'
+import { Star, Upload, Check, X, FileText, Image as ImageIcon, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface FileUploadValue {
@@ -26,62 +26,11 @@ interface FileUploadQuestionProps {
 
 function FileUploadQuestion({ question, value, onChange, theme }: FileUploadQuestionProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
 
-  const handleFileSelect = useCallback(async (file: File) => {
-    setUploadError(null)
-    setIsUploading(true)
-
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        // If R2 is not configured, fall back to base64
-        if (response.status === 503 && !result.configured) {
-          // Fall back to base64 for local/demo usage
-          const reader = new FileReader()
-          reader.onload = () => {
-            onChange({
-              name: file.name,
-              type: file.type,
-              size: file.size,
-              url: reader.result as string, // base64 data URL
-            })
-            setIsUploading(false)
-          }
-          reader.onerror = () => {
-            setUploadError('Failed to read file')
-            setIsUploading(false)
-          }
-          reader.readAsDataURL(file)
-          return
-        }
-        
-        throw new Error(result.error || 'Upload failed')
-      }
-
-      // Success - store the R2 URL
-      onChange({
-        name: result.file.name,
-        type: result.file.type,
-        size: result.file.size,
-        url: result.url,
-      })
-    } catch (error) {
-      setUploadError(error instanceof Error ? error.message : 'Upload failed')
-    } finally {
-      setIsUploading(false)
-    }
-  }, [onChange])
+  const handleFileSelect = useCallback(() => {
+    setUploadError('File upload is currently unavailable')
+  }, [])
 
   return (
     <div>
@@ -93,7 +42,7 @@ function FileUploadQuestion({ question, value, onChange, theme }: FileUploadQues
         onChange={(e) => {
           const file = e.target.files?.[0]
           if (file) {
-            handleFileSelect(file)
+            handleFileSelect()
           }
           // Reset input so same file can be selected again
           e.target.value = ''
@@ -132,17 +81,6 @@ function FileUploadQuestion({ question, value, onChange, theme }: FileUploadQues
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
-      ) : isUploading ? (
-        <div 
-          className="w-full p-8 rounded-xl border-2 border-dashed flex flex-col items-center gap-3"
-          style={{ 
-            borderColor: theme.primaryColor,
-            color: theme.textColor,
-          }}
-        >
-          <Loader2 className="w-8 h-8 animate-spin" style={{ color: theme.primaryColor }} />
-          <p className="font-medium">Uploading...</p>
         </div>
       ) : (
         <div>

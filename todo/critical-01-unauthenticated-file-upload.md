@@ -24,3 +24,7 @@ Anyone can use this endpoint as a free, anonymous file-hosting service. Maliciou
    - Issue temporary pre-signed upload URLs rather than proxying raw bytes through the Next.js server.
    - Enforce IP-based rate limiting (via Upstash Redis or Cloudflare WAF).
    - Alternatively, migrate to Supabase Storage with dedicated Row Level Security policies.
+
+
+### Resolution
+Fixed by completely removing the unauthenticated `/api/upload` route handler (`app/api/upload/route.ts`), removing unused `@aws-sdk/client-s3` dependency, and updating `components/form-player/question-renderer.tsx` to prevent requests to the removed endpoint.

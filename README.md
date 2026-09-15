@@ -103,7 +103,6 @@ tcc-form/
 │   ├── (auth)/              # Login page
 │   ├── (dashboard)/         # Protected pages (dashboard, form builder, responses, settings)
 │   ├── page.tsx             # Homepage = example movie form
-│   ├── api/upload/          # File upload endpoint (Cloudflare R2)
 │   ├── auth/callback/       # Supabase auth callback
 │   └── f/[slug]/            # Public form pages
 ├── components/
