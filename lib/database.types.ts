@@ -170,6 +170,139 @@ export interface Database {
           respondent_hash?: string | null
         }
       }
+      questions: {
+        Row: {
+          id: string
+          form_id: string
+          question_key: string
+          order_index: number
+          type: string
+          title: string
+          description: string | null
+          display_number: string | null
+          required: boolean
+          placeholder: string | null
+          min_value: number | null
+          max_value: number | null
+          max_select: number | null
+          exclusive_options: string[] | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          form_id: string
+          question_key: string
+          order_index?: number
+          type: string
+          title: string
+          description?: string | null
+          display_number?: string | null
+          required?: boolean
+          placeholder?: string | null
+          min_value?: number | null
+          max_value?: number | null
+          max_select?: number | null
+          exclusive_options?: string[] | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          form_id?: string
+          question_key?: string
+          order_index?: number
+          type?: string
+          title?: string
+          description?: string | null
+          display_number?: string | null
+          required?: boolean
+          placeholder?: string | null
+          min_value?: number | null
+          max_value?: number | null
+          max_select?: number | null
+          exclusive_options?: string[] | null
+          updated_at?: string
+        }
+      }
+      question_options: {
+        Row: {
+          id: string
+          question_id: string
+          label: string
+          value: string | null
+          order_index: number
+          is_exclusive: boolean
+        }
+        Insert: {
+          id?: string
+          question_id: string
+          label: string
+          value?: string | null
+          order_index?: number
+          is_exclusive?: boolean
+        }
+        Update: {
+          id?: string
+          question_id?: string
+          label?: string
+          value?: string | null
+          order_index?: number
+          is_exclusive?: boolean
+        }
+      }
+      question_matrix_rows: {
+        Row: {
+          id: string
+          question_id: string
+          row_key: string
+          label: string
+          description: string | null
+          order_index: number
+        }
+        Insert: {
+          id?: string
+          question_id: string
+          row_key: string
+          label: string
+          description?: string | null
+          order_index?: number
+        }
+        Update: {
+          id?: string
+          question_id?: string
+          row_key?: string
+          label?: string
+          description?: string | null
+          order_index?: number
+        }
+      }
+      question_matrix_columns: {
+        Row: {
+          id: string
+          question_id: string
+          col_key: string
+          label: string
+          short_label: string | null
+          order_index: number
+        }
+        Insert: {
+          id?: string
+          question_id: string
+          col_key: string
+          label: string
+          short_label?: string | null
+          order_index?: number
+        }
+        Update: {
+          id?: string
+          question_id?: string
+          col_key?: string
+          label?: string
+          short_label?: string | null
+          order_index?: number
+        }
+      }
     }
   }
 }
@@ -181,4 +314,9 @@ export type FormInsert = Database['public']['Tables']['forms']['Insert']
 export type FormUpdate = Database['public']['Tables']['forms']['Update']
 export type Response = Database['public']['Tables']['responses']['Row']
 export type ResponseInsert = Database['public']['Tables']['responses']['Insert']
+export type NormalizedQuestion = Database['public']['Tables']['questions']['Row']
+export type NormalizedQuestionInsert = Database['public']['Tables']['questions']['Insert']
+export type NormalizedQuestionOption = Database['public']['Tables']['question_options']['Row']
+export type NormalizedMatrixRow = Database['public']['Tables']['question_matrix_rows']['Row']
+export type NormalizedMatrixColumn = Database['public']['Tables']['question_matrix_columns']['Row']
 

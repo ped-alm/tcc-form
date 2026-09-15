@@ -29,14 +29,15 @@ describe('Supabase Schema and RLS Security Policies', () => {
   it('should protect respondent privacy by restricting response SELECT to authenticated researchers', () => {
     expect(schemaSql).toContain('CREATE POLICY "Authenticated users can view responses"')
     expect(schemaSql).toMatch(/ON responses FOR SELECT[\s\S]*?TO authenticated/i)
-    // Verify that anon is NEVER granted SELECT on responses
-    expect(schemaSql).not.toMatch(/ON responses FOR SELECT[\s\S]*?TO[^\n]*anon/i)
+    // Verify that anon is NEVER granted SELECT on responses within the policy statement
+    expect(schemaSql).not.toMatch(/ON responses FOR SELECT[^;]*?TO[^\n]*anon/i)
   })
 
   it('should protect responses from unauthorized deletion', () => {
     expect(schemaSql).toContain('CREATE POLICY "Authenticated users can delete responses"')
     expect(schemaSql).toMatch(/ON responses FOR DELETE[\s\S]*?TO authenticated/i)
-    expect(schemaSql).not.toMatch(/ON responses FOR DELETE[\s\S]*?TO[^\n]*anon/i)
+    // Verify that anon is NEVER granted DELETE on responses within the policy statement
+    expect(schemaSql).not.toMatch(/ON responses FOR DELETE[^;]*?TO[^\n]*anon/i)
   })
 
   it('should enforce singleton form architecture via database check constraint', () => {

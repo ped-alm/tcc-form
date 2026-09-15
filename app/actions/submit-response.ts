@@ -4,6 +4,7 @@ import { cookies, headers } from 'next/headers'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Form, QuestionConfig, Json } from '@/lib/database.types'
 import { validateAnswers } from '@/lib/validation'
+import { verifyTurnstileToken } from '@/lib/turnstile'
 import {
   exampleForm,
   EXAMPLE_FORM_ID,
@@ -16,6 +17,7 @@ export interface SubmitResponsePayload {
   answers: Record<string, Json>
   respondentHash?: string
   clientToken?: string
+  turnstileToken?: string
 }
 
 export interface SubmitResponseResult {
@@ -133,6 +135,19 @@ export async function submitResponseAction(
 
   // 3. Resolve Questions Configuration based on Language
   const language = (payload.answers._survey_language as SurveyLanguage) || 'pt'
+
+  // 4. Cloudflare Turnstile Bot Protection Verification
+  const turnstileResult = await verifyTurnstileToken(payload.turnstileToken, clientIp)
+  if (!turnstileResult.success) {
+    return {
+      success: false,
+      error:
+        language === 'en'
+          ? 'Security challenge verification failed. Please try again.'
+          : 'Falha na verificação de segurança. Por favor, tente novamente.',
+    }
+  }
+
   const isSurvey = Boolean(
     form.questions &&
       (form.questions as QuestionConfig[]).some(q => q.id === 'q01-consentimento')
@@ -142,7 +157,7 @@ export async function submitResponseAction(
     ? surveyTranslations[language]?.questions || exampleForm.questions
     : (form.questions as QuestionConfig[]) || []
 
-  // 4. Strict Server-Side Validation with Zod
+  // 5. Strict Server-Side Validation with Zod
   const validation = validateAnswers(payload.answers, questions, language)
   if (!validation.isValid) {
     return {

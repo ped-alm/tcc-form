@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
 import { ChevronUp, ChevronDown, Check, ArrowRight, Globe } from 'lucide-react'
 import { QuestionRenderer } from './question-renderer'
+import { TurnstileWidget, TurnstileWidgetRef } from './turnstile-widget'
 import { toast } from 'sonner'
 import { submitResponseAction } from '@/app/actions/submit-response'
 import { generateRespondentFingerprint } from '@/lib/fingerprint'
@@ -55,8 +56,10 @@ export function FormPlayer({ form }: FormPlayerProps) {
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [direction, setDirection] = useState(0)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
   
   const containerRef = useRef<HTMLDivElement>(null)
+  const turnstileRef = useRef<TurnstileWidgetRef>(null)
   const skipNextValidationRef = useRef(false)
 
   // Check if this respondent already submitted from this browser
@@ -76,6 +79,7 @@ export function FormPlayer({ form }: FormPlayerProps) {
   const isLastQuestion = currentIndex === questions.length - 1
   const isFirstQuestion = !hasStarted
   const progress = !hasStarted ? 0 : questions.length > 0 ? ((currentIndex + 1) / questions.length) * 100 : 0
+  const isTurnstileRequired = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY)
 
   const validateQuestionById = (question: QuestionConfig): boolean => {
     const answer = answers[question.id]
@@ -210,6 +214,7 @@ export function FormPlayer({ form }: FormPlayerProps) {
         },
         respondentHash,
         clientToken,
+        turnstileToken: turnstileToken || undefined,
       })
 
       if (result.success) {
@@ -222,6 +227,8 @@ export function FormPlayer({ form }: FormPlayerProps) {
         }
         setIsSubmitted(true)
       } else {
+        turnstileRef.current?.reset()
+        setTurnstileToken(null)
         if (result.validationErrors) {
           setErrors(prev => ({ ...prev, ...result.validationErrors }))
           const firstErrorId = Object.keys(result.validationErrors)[0]
@@ -236,6 +243,8 @@ export function FormPlayer({ form }: FormPlayerProps) {
         )
       }
     } catch {
+      turnstileRef.current?.reset()
+      setTurnstileToken(null)
       toast.error(
         language === 'en' ? 'Error submitting response' : 'Erro ao registrar resposta'
       )
@@ -271,6 +280,14 @@ export function FormPlayer({ form }: FormPlayerProps) {
     }
     
     if (isLastQuestion) {
+      if (isTurnstileRequired && !turnstileToken) {
+        toast.error(
+          language === 'en'
+            ? 'Please complete the security verification before submitting.'
+            : 'Por favor, complete a verificação de segurança antes de enviar.'
+        )
+        return
+      }
       handleSubmit()
     } else {
       setDirection(1)
@@ -766,6 +783,19 @@ export function FormPlayer({ form }: FormPlayerProps) {
                   )}
                 </AnimatePresence>
 
+                {/* Cloudflare Turnstile bot verification */}
+                {isLastQuestion && (
+                  <TurnstileWidget
+                    ref={turnstileRef}
+                    onToken={(token) => setTurnstileToken(token)}
+                    onError={() => setTurnstileToken(null)}
+                    onExpire={() => setTurnstileToken(null)}
+                    theme={['lavender', 'minimal'].includes(form.theme || 'ocean') ? 'light' : 'dark'}
+                    language={language}
+                    className="mt-6 mb-2"
+                  />
+                )}
+
                 {/* Action buttons */}
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -775,7 +805,7 @@ export function FormPlayer({ form }: FormPlayerProps) {
                 >
                   <Button
                     onClick={() => goToNext()}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || (isLastQuestion && isTurnstileRequired && !turnstileToken)}
                     className="h-12 px-6 text-base font-medium rounded-xl transition-all hover:scale-[1.02]"
                     style={{ 
                       backgroundColor: theme.primaryColor,
