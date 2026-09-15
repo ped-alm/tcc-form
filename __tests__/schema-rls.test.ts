@@ -16,9 +16,9 @@ describe('Supabase Schema and RLS Security Policies', () => {
     expect(schemaSql).toMatch(/ON forms FOR SELECT[\s\S]*?TO anon, authenticated[\s\S]*?USING \(status = 'published'\);/i)
   })
 
-  it('should restrict form mutations to authenticated users', () => {
-    expect(schemaSql).toContain('CREATE POLICY "Authenticated users can manage forms"')
-    expect(schemaSql).toMatch(/ON forms FOR ALL[\s\S]*?TO authenticated/i)
+  it('should restrict form mutations to authenticated admin users with admin role claim', () => {
+    expect(schemaSql).toContain('CREATE POLICY "Admins can manage forms"')
+    expect(schemaSql).toMatch(/ON forms FOR ALL[\s\S]*?TO authenticated[\s\S]*?auth\.jwt\(\)->'app_metadata'->>'role'\) = 'admin'/i)
   })
 
   it('should allow public responses insertion only for published forms', () => {
@@ -26,28 +26,53 @@ describe('Supabase Schema and RLS Security Policies', () => {
     expect(schemaSql).toMatch(/ON responses FOR INSERT[\s\S]*?WHERE forms\.id = form_id[\s\S]*?AND forms\.status = 'published'/i)
   })
 
-  it('should protect respondent privacy by restricting response SELECT to authenticated researchers', () => {
-    expect(schemaSql).toContain('CREATE POLICY "Authenticated users can view responses"')
-    expect(schemaSql).toMatch(/ON responses FOR SELECT[\s\S]*?TO authenticated/i)
+  it('should protect respondent privacy by restricting response SELECT to authenticated admin researchers', () => {
+    expect(schemaSql).toContain('CREATE POLICY "Admins can view responses"')
+    expect(schemaSql).toMatch(/ON responses FOR SELECT[\s\S]*?TO authenticated[\s\S]*?auth\.jwt\(\)->'app_metadata'->>'role'\) = 'admin'/i)
     // Verify that anon is NEVER granted SELECT on responses within the policy statement
     expect(schemaSql).not.toMatch(/ON responses FOR SELECT[^;]*?TO[^\n]*anon/i)
   })
 
-  it('should protect responses from unauthorized deletion', () => {
-    expect(schemaSql).toContain('CREATE POLICY "Authenticated users can delete responses"')
-    expect(schemaSql).toMatch(/ON responses FOR DELETE[\s\S]*?TO authenticated/i)
+  it('should protect responses from unauthorized deletion by requiring admin role claim', () => {
+    expect(schemaSql).toContain('CREATE POLICY "Admins can delete responses"')
+    expect(schemaSql).toMatch(/ON responses FOR DELETE[\s\S]*?TO authenticated[\s\S]*?auth\.jwt\(\)->'app_metadata'->>'role'\) = 'admin'/i)
     // Verify that anon is NEVER granted DELETE on responses within the policy statement
     expect(schemaSql).not.toMatch(/ON responses FOR DELETE[^;]*?TO[^\n]*anon/i)
+  })
+
+  it('should not contain overly permissive USING (true) policies for authenticated role (preventing BOLA/IDOR)', () => {
+    const normalizedSchemaPath = path.resolve(__dirname, '../supabase/normalized-schema.sql')
+    const normalizedSchemaSql = fs.readFileSync(normalizedSchemaPath, 'utf8')
+
+    for (const sql of [schemaSql, normalizedSchemaSql]) {
+      // Must not contain any policy granting unrestricted access to authenticated role
+      expect(sql).not.toMatch(/TO authenticated[\s\n]+USING\s*\(\s*true\s*\)/i)
+      expect(sql).toContain('DROP POLICY IF EXISTS "Authenticated users can manage questions"')
+    }
+
+    expect(schemaSql).toContain('DROP POLICY IF EXISTS "Authenticated users can manage forms"')
+    expect(schemaSql).toContain('DROP POLICY IF EXISTS "Authenticated users can view responses"')
+    expect(schemaSql).toContain('DROP POLICY IF EXISTS "Authenticated users can delete responses"')
   })
 
   it('should enforce singleton form architecture via database check constraint', () => {
     expect(schemaSql).toMatch(/is_singleton\s+BOOLEAN\s+DEFAULT\s+true\s+NOT\s+NULL\s+UNIQUE\s+CHECK\s*\(is_singleton\)/i)
   })
 
-  it('should define performance indexes for response deduplication and queries', () => {
+  it('should define performance indexes and unique constraint for response deduplication and queries', () => {
     expect(schemaSql).toContain('CREATE INDEX idx_responses_form_id')
     expect(schemaSql).toContain('CREATE INDEX idx_responses_submitted_at')
-    expect(schemaSql).toContain('CREATE INDEX idx_responses_respondent_hash')
+    expect(schemaSql).toContain('CREATE UNIQUE INDEX idx_responses_unique_respondent')
+    expect(schemaSql).toMatch(/CREATE\s+UNIQUE\s+INDEX\s+idx_responses_unique_respondent\s+ON\s+responses\s*\(\s*form_id\s*,\s*respondent_hash\s*\)\s+WHERE\s+respondent_hash\s+IS\s+NOT\s+NULL/i)
+  })
+
+  it('should define secure submit_survey_response RPC function with SECURITY DEFINER and execute permissions', () => {
+    expect(schemaSql).toContain('CREATE OR REPLACE FUNCTION submit_survey_response')
+    expect(schemaSql).toMatch(/SECURITY\s+DEFINER/i)
+    expect(schemaSql).toMatch(/SET\s+search_path\s*=\s*public/i)
+    expect(schemaSql).toMatch(/RETURNS\s+JSONB/i)
+    expect(schemaSql).toMatch(/WHEN\s+unique_violation\s+THEN/i)
+    expect(schemaSql).toContain('GRANT EXECUTE ON FUNCTION submit_survey_response(UUID, JSONB, TEXT) TO anon, authenticated;')
   })
 
   it('should enforce security_invoker on analytical views and revoke anon/public privileges to prevent RLS bypass', () => {

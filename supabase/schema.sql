@@ -35,7 +35,14 @@ CREATE TABLE responses (
 -- Indexes for faster response lookups, deduplication and dashboard export
 CREATE INDEX idx_responses_form_id ON responses(form_id);
 CREATE INDEX idx_responses_submitted_at ON responses(submitted_at DESC);
-CREATE INDEX idx_responses_respondent_hash ON responses(form_id, respondent_hash);
+
+-- Remove non-unique index if present
+DROP INDEX IF EXISTS idx_responses_respondent_hash;
+
+-- Create unique index to guarantee race-proof deduplication
+CREATE UNIQUE INDEX idx_responses_unique_respondent
+  ON responses(form_id, respondent_hash)
+  WHERE respondent_hash IS NOT NULL;
 
 -- Row Level Security (RLS) Policies
 
@@ -50,12 +57,15 @@ CREATE POLICY "Anyone can view published forms"
   TO anon, authenticated
   USING (status = 'published');
 
--- Authenticated users (admin/researcher) can manage the form
-CREATE POLICY "Authenticated users can manage forms"
+-- Forms management policy:
+-- Only authenticated users with admin role in app_metadata can manage forms
+DROP POLICY IF EXISTS "Authenticated users can manage forms" ON forms;
+DROP POLICY IF EXISTS "Admins can manage forms" ON forms;
+CREATE POLICY "Admins can manage forms"
   ON forms FOR ALL
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING ((select auth.jwt()->'app_metadata'->>'role') = 'admin')
+  WITH CHECK ((select auth.jwt()->'app_metadata'->>'role') = 'admin');
 
 -- Responses policies:
 -- Anyone can submit responses to the published form
@@ -70,17 +80,21 @@ CREATE POLICY "Anyone can submit responses to published forms"
     )
   );
 
--- Authenticated users (admin/researcher) can view responses
-CREATE POLICY "Authenticated users can view responses"
+-- Only authenticated users with admin role in app_metadata can view responses
+DROP POLICY IF EXISTS "Authenticated users can view responses" ON responses;
+DROP POLICY IF EXISTS "Admins can view responses" ON responses;
+CREATE POLICY "Admins can view responses"
   ON responses FOR SELECT
   TO authenticated
-  USING (true);
+  USING ((select auth.jwt()->'app_metadata'->>'role') = 'admin');
 
--- Authenticated users (admin/researcher) can delete responses
-CREATE POLICY "Authenticated users can delete responses"
+-- Only authenticated users with admin role in app_metadata can delete responses
+DROP POLICY IF EXISTS "Authenticated users can delete responses" ON responses;
+DROP POLICY IF EXISTS "Admins can delete responses" ON responses;
+CREATE POLICY "Admins can delete responses"
   ON responses FOR DELETE
   TO authenticated
-  USING (true);
+  USING ((select auth.jwt()->'app_metadata'->>'role') = 'admin');
 
 -- Functions and Triggers
 
@@ -96,6 +110,60 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER update_forms_updated_at
   BEFORE UPDATE ON forms
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- Secure RPC Function: submit_survey_response
+-- Executes with SECURITY DEFINER to allow anonymous respondents to submit responses
+-- and perform deduplication checks atomically, without granting public SELECT access to responses table.
+CREATE OR REPLACE FUNCTION submit_survey_response(
+  p_form_id UUID,
+  p_answers JSONB,
+  p_respondent_hash TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_existing_id UUID;
+  v_new_id UUID;
+BEGIN
+  -- 1. Verify form exists and is published
+  IF NOT EXISTS (
+    SELECT 1 FROM forms WHERE id = p_form_id AND status = 'published'
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Form not found or not published');
+  END IF;
+
+  -- 2. Check for duplicate submission by respondent hash if provided
+  IF p_respondent_hash IS NOT NULL THEN
+    SELECT id INTO v_existing_id
+    FROM responses
+    WHERE form_id = p_form_id AND respondent_hash = p_respondent_hash
+    LIMIT 1;
+
+    IF v_existing_id IS NOT NULL THEN
+      RETURN jsonb_build_object('success', true, 'is_duplicate', true);
+    END IF;
+  END IF;
+
+  -- 3. Insert response record (safely catching race conditions via unique index idx_responses_unique_respondent)
+  BEGIN
+    INSERT INTO responses (form_id, answers, respondent_hash)
+    VALUES (p_form_id, p_answers, p_respondent_hash)
+    RETURNING id INTO v_new_id;
+
+    RETURN jsonb_build_object('success', true, 'is_duplicate', false, 'id', v_new_id);
+  EXCEPTION
+    WHEN unique_violation THEN
+      RETURN jsonb_build_object('success', true, 'is_duplicate', true);
+  END;
+END;
+$$;
+
+-- Grant execution to anon and authenticated roles
+REVOKE ALL ON FUNCTION submit_survey_response(UUID, JSONB, TEXT) FROM public;
+GRANT EXECUTE ON FUNCTION submit_survey_response(UUID, JSONB, TEXT) TO anon, authenticated;
 
 -- =====================================================================
 -- Normalized Relational Schema for Form Questions
@@ -179,11 +247,13 @@ CREATE POLICY "Anyone can view questions of published forms"
     )
   );
 
-CREATE POLICY "Authenticated users can manage questions"
+DROP POLICY IF EXISTS "Authenticated users can manage questions" ON questions;
+DROP POLICY IF EXISTS "Admins can manage questions" ON questions;
+CREATE POLICY "Admins can manage questions"
   ON questions FOR ALL
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING ((select auth.jwt()->'app_metadata'->>'role') = 'admin')
+  WITH CHECK ((select auth.jwt()->'app_metadata'->>'role') = 'admin');
 
 -- Question Options RLS Policies:
 CREATE POLICY "Anyone can view options of published forms"
@@ -198,11 +268,13 @@ CREATE POLICY "Anyone can view options of published forms"
     )
   );
 
-CREATE POLICY "Authenticated users can manage question options"
+DROP POLICY IF EXISTS "Authenticated users can manage question options" ON question_options;
+DROP POLICY IF EXISTS "Admins can manage question options" ON question_options;
+CREATE POLICY "Admins can manage question options"
   ON question_options FOR ALL
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING ((select auth.jwt()->'app_metadata'->>'role') = 'admin')
+  WITH CHECK ((select auth.jwt()->'app_metadata'->>'role') = 'admin');
 
 -- Matrix Rows RLS Policies:
 CREATE POLICY "Anyone can view matrix rows of published forms"
@@ -217,11 +289,13 @@ CREATE POLICY "Anyone can view matrix rows of published forms"
     )
   );
 
-CREATE POLICY "Authenticated users can manage matrix rows"
+DROP POLICY IF EXISTS "Authenticated users can manage matrix rows" ON question_matrix_rows;
+DROP POLICY IF EXISTS "Admins can manage matrix rows" ON question_matrix_rows;
+CREATE POLICY "Admins can manage matrix rows"
   ON question_matrix_rows FOR ALL
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING ((select auth.jwt()->'app_metadata'->>'role') = 'admin')
+  WITH CHECK ((select auth.jwt()->'app_metadata'->>'role') = 'admin');
 
 -- Matrix Columns RLS Policies:
 CREATE POLICY "Anyone can view matrix columns of published forms"
@@ -236,11 +310,13 @@ CREATE POLICY "Anyone can view matrix columns of published forms"
     )
   );
 
-CREATE POLICY "Authenticated users can manage matrix columns"
+DROP POLICY IF EXISTS "Authenticated users can manage matrix columns" ON question_matrix_columns;
+DROP POLICY IF EXISTS "Admins can manage matrix columns" ON question_matrix_columns;
+CREATE POLICY "Admins can manage matrix columns"
   ON question_matrix_columns FOR ALL
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING ((select auth.jwt()->'app_metadata'->>'role') = 'admin')
+  WITH CHECK ((select auth.jwt()->'app_metadata'->>'role') = 'admin');
 
 -- Automatic Synchronization Function:
 -- Keeps normalized relational tables in sync with forms.questions JSONB

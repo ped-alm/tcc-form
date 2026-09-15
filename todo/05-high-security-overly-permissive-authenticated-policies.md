@@ -2,7 +2,7 @@
 
 **Severity**: HIGH  
 **Category**: Supabase Security / Authorization (BOLA/IDOR)  
-**Status**: Verified Issue  
+**Status**: Resolved  
 **Files**: `supabase/schema.sql` (lines 54-58, 73-83, 182-186, 201-205, 220-224, 239-243), `supabase/normalized-schema.sql` (lines 84-90, 105-110, 126-131, 147-152)
 
 ---

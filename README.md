@@ -40,7 +40,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-or-publishable-key
 
 In the Supabase Dashboard, open the **SQL Editor** and run:
 
-1. `supabase/schema.sql` - creates `forms` and `responses` tables, indexes, and RLS policies.
+1. `supabase/schema.sql` - creates `forms` and `responses` tables, indexes, RPC deduplication function, and RLS policies.
 2. `supabase/seed-example-form.sql` - seeds the survey form.
 
 ### 4. Run the app

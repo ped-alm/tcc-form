@@ -46,6 +46,17 @@ describe('Normalized Database Schema and Utilities', () => {
       expect(schemaSql).toContain('CREATE POLICY "Anyone can view matrix columns of published forms"')
     })
 
+    it('restricts management of normalized tables to authenticated users with admin role claim', () => {
+      expect(schemaSql).toContain('CREATE POLICY "Admins can manage questions"')
+      expect(schemaSql).toContain('CREATE POLICY "Admins can manage question options"')
+      expect(schemaSql).toContain('CREATE POLICY "Admins can manage matrix rows"')
+      expect(schemaSql).toContain('CREATE POLICY "Admins can manage matrix columns"')
+      expect(schemaSql).toMatch(/ON questions FOR ALL[\s\S]*?TO authenticated[\s\S]*?auth\.jwt\(\)->'app_metadata'->>'role'\) = 'admin'/i)
+      expect(schemaSql).toMatch(/ON question_options FOR ALL[\s\S]*?TO authenticated[\s\S]*?auth\.jwt\(\)->'app_metadata'->>'role'\) = 'admin'/i)
+      expect(schemaSql).toMatch(/ON question_matrix_rows FOR ALL[\s\S]*?TO authenticated[\s\S]*?auth\.jwt\(\)->'app_metadata'->>'role'\) = 'admin'/i)
+      expect(schemaSql).toMatch(/ON question_matrix_columns FOR ALL[\s\S]*?TO authenticated[\s\S]*?auth\.jwt\(\)->'app_metadata'->>'role'\) = 'admin'/i)
+    })
+
     it('defines automatic synchronization trigger to populate normalized tables from forms.questions JSONB', () => {
       expect(schemaSql).toContain('CREATE OR REPLACE FUNCTION sync_form_questions_to_normalized()')
       expect(schemaSql).toContain('CREATE TRIGGER sync_form_questions_trigger')

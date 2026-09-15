@@ -304,6 +304,16 @@ export interface Database {
         }
       }
     }
+    Functions: {
+      submit_survey_response: {
+        Args: {
+          p_form_id: string
+          p_answers: Json
+          p_respondent_hash?: string | null
+        }
+        Returns: Json
+      }
+    }
   }
 }
 

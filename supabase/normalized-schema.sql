@@ -82,11 +82,12 @@ CREATE POLICY "Anyone can view questions of published forms"
   );
 
 DROP POLICY IF EXISTS "Authenticated users can manage questions" ON questions;
-CREATE POLICY "Authenticated users can manage questions"
+DROP POLICY IF EXISTS "Admins can manage questions" ON questions;
+CREATE POLICY "Admins can manage questions"
   ON questions FOR ALL
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING ((select auth.jwt()->'app_metadata'->>'role') = 'admin')
+  WITH CHECK ((select auth.jwt()->'app_metadata'->>'role') = 'admin');
 
 -- Question Options RLS Policies:
 DROP POLICY IF EXISTS "Anyone can view options of published forms" ON question_options;
@@ -103,11 +104,12 @@ CREATE POLICY "Anyone can view options of published forms"
   );
 
 DROP POLICY IF EXISTS "Authenticated users can manage question options" ON question_options;
-CREATE POLICY "Authenticated users can manage question options"
+DROP POLICY IF EXISTS "Admins can manage question options" ON question_options;
+CREATE POLICY "Admins can manage question options"
   ON question_options FOR ALL
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING ((select auth.jwt()->'app_metadata'->>'role') = 'admin')
+  WITH CHECK ((select auth.jwt()->'app_metadata'->>'role') = 'admin');
 
 -- Matrix Rows RLS Policies:
 DROP POLICY IF EXISTS "Anyone can view matrix rows of published forms" ON question_matrix_rows;
@@ -124,11 +126,12 @@ CREATE POLICY "Anyone can view matrix rows of published forms"
   );
 
 DROP POLICY IF EXISTS "Authenticated users can manage matrix rows" ON question_matrix_rows;
-CREATE POLICY "Authenticated users can manage matrix rows"
+DROP POLICY IF EXISTS "Admins can manage matrix rows" ON question_matrix_rows;
+CREATE POLICY "Admins can manage matrix rows"
   ON question_matrix_rows FOR ALL
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING ((select auth.jwt()->'app_metadata'->>'role') = 'admin')
+  WITH CHECK ((select auth.jwt()->'app_metadata'->>'role') = 'admin');
 
 -- Matrix Columns RLS Policies:
 DROP POLICY IF EXISTS "Anyone can view matrix columns of published forms" ON question_matrix_columns;
@@ -145,11 +148,12 @@ CREATE POLICY "Anyone can view matrix columns of published forms"
   );
 
 DROP POLICY IF EXISTS "Authenticated users can manage matrix columns" ON question_matrix_columns;
-CREATE POLICY "Authenticated users can manage matrix columns"
+DROP POLICY IF EXISTS "Admins can manage matrix columns" ON question_matrix_columns;
+CREATE POLICY "Admins can manage matrix columns"
   ON question_matrix_columns FOR ALL
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING ((select auth.jwt()->'app_metadata'->>'role') = 'admin')
+  WITH CHECK ((select auth.jwt()->'app_metadata'->>'role') = 'admin');
 
 -- Automatic Synchronization Function:
 -- Keeps normalized relational tables in sync with forms.questions JSONB
