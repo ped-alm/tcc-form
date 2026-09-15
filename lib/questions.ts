@@ -1,0 +1,163 @@
+import { QuestionType, QuestionConfig } from './database.types'
+import { 
+  Type, 
+  AlignLeft, 
+  List, 
+  CheckSquare, 
+  Mail, 
+  Phone, 
+  Hash, 
+  Calendar, 
+  Star, 
+  Gauge, 
+  ThumbsUp, 
+  Upload, 
+  Link,
+  LucideIcon
+} from 'lucide-react'
+
+export interface QuestionTypeInfo {
+  type: QuestionType
+  label: string
+  description: string
+  icon: LucideIcon
+  defaultConfig: Partial<QuestionConfig>
+}
+
+export const questionTypes: QuestionTypeInfo[] = [
+  {
+    type: 'short_text',
+    label: 'Short Text',
+    description: 'A single line text input',
+    icon: Type,
+    defaultConfig: {
+      placeholder: 'Type your answer here...',
+    },
+  },
+  {
+    type: 'long_text',
+    label: 'Long Text',
+    description: 'A multi-line text area',
+    icon: AlignLeft,
+    defaultConfig: {
+      placeholder: 'Type your answer here...',
+    },
+  },
+  {
+    type: 'dropdown',
+    label: 'Dropdown',
+    description: 'Select one option from a list',
+    icon: List,
+    defaultConfig: {
+      options: ['Option 1', 'Option 2', 'Option 3'],
+    },
+  },
+  {
+    type: 'checkboxes',
+    label: 'Checkboxes',
+    description: 'Select multiple options from a list',
+    icon: CheckSquare,
+    defaultConfig: {
+      options: ['Option 1', 'Option 2', 'Option 3'],
+    },
+  },
+  {
+    type: 'email',
+    label: 'Email',
+    description: 'An email address input',
+    icon: Mail,
+    defaultConfig: {
+      placeholder: 'name@example.com',
+    },
+  },
+  {
+    type: 'phone',
+    label: 'Phone',
+    description: 'A phone number input',
+    icon: Phone,
+    defaultConfig: {
+      placeholder: '+1 (555) 000-0000',
+    },
+  },
+  {
+    type: 'number',
+    label: 'Number',
+    description: 'A numeric input',
+    icon: Hash,
+    defaultConfig: {
+      placeholder: '0',
+    },
+  },
+  {
+    type: 'date',
+    label: 'Date',
+    description: 'A date picker',
+    icon: Calendar,
+    defaultConfig: {},
+  },
+  {
+    type: 'rating',
+    label: 'Rating',
+    description: 'A star rating (1-5)',
+    icon: Star,
+    defaultConfig: {
+      minValue: 1,
+      maxValue: 5,
+    },
+  },
+  {
+    type: 'opinion_scale',
+    label: 'Opinion Scale',
+    description: 'A numeric scale (1-10)',
+    icon: Gauge,
+    defaultConfig: {
+      minValue: 1,
+      maxValue: 10,
+    },
+  },
+  {
+    type: 'yes_no',
+    label: 'Yes / No',
+    description: 'A simple yes or no choice',
+    icon: ThumbsUp,
+    defaultConfig: {},
+  },
+  {
+    type: 'file_upload',
+    label: 'File Upload',
+    description: 'Upload images or PDFs',
+    icon: Upload,
+    defaultConfig: {
+      allowedFileTypes: ['image/*', 'application/pdf'],
+      maxFileSize: 10, // MB
+    },
+  },
+  {
+    type: 'url',
+    label: 'Website URL',
+    description: 'A URL input',
+    icon: Link,
+    defaultConfig: {
+      placeholder: 'https://example.com',
+    },
+  },
+]
+
+export function getQuestionTypeInfo(type: QuestionType): QuestionTypeInfo | undefined {
+  return questionTypes.find(qt => qt.type === type)
+}
+
+export function createDefaultQuestion(type: QuestionType): QuestionConfig {
+  const typeInfo = getQuestionTypeInfo(type)
+  const id = crypto.randomUUID()
+  
+  return {
+    id,
+    type,
+    title: '',
+    description: '',
+    required: false,
+    ...typeInfo?.defaultConfig,
+  }
+}
+
