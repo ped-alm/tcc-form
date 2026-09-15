@@ -155,16 +155,19 @@ export interface Database {
           id: string
           form_id: string
           answers: Record<string, Json>
+          respondent_hash: string | null
           submitted_at: string
         }
         Insert: {
           id?: string
           form_id?: string
           answers: Record<string, Json>
+          respondent_hash?: string | null
           submitted_at?: string
         }
         Update: {
           answers?: Record<string, Json>
+          respondent_hash?: string | null
         }
       }
     }

@@ -28,12 +28,14 @@ CREATE TABLE responses (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   form_id UUID DEFAULT '11111111-1111-4111-8111-111111111111'::uuid REFERENCES forms(id) ON DELETE CASCADE NOT NULL,
   answers JSONB NOT NULL DEFAULT '{}'::jsonb,
+  respondent_hash TEXT,
   submitted_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Indexes for faster response lookups and dashboard export
+-- Indexes for faster response lookups, deduplication and dashboard export
 CREATE INDEX idx_responses_form_id ON responses(form_id);
 CREATE INDEX idx_responses_submitted_at ON responses(submitted_at DESC);
+CREATE INDEX idx_responses_respondent_hash ON responses(form_id, respondent_hash);
 
 -- Row Level Security (RLS) Policies
 

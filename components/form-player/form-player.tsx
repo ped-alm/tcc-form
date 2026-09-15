@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useEffect, useRef } from 'react'
 import { Form, QuestionConfig, Json } from '@/lib/database.types'
 import { getTheme, getThemeCSSVariables } from '@/lib/themes'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -10,6 +9,8 @@ import { Button } from '@/components/ui/button'
 import { ChevronUp, ChevronDown, Check, ArrowRight, Globe } from 'lucide-react'
 import { QuestionRenderer } from './question-renderer'
 import { toast } from 'sonner'
+import { submitResponseAction } from '@/app/actions/submit-response'
+import { generateRespondentFingerprint } from '@/lib/fingerprint'
 import {
   surveyTranslations,
   SurveyLanguage,
@@ -23,7 +24,6 @@ interface FormPlayerProps {
 }
 
 export function FormPlayer({ form }: FormPlayerProps) {
-  const supabase = useMemo(() => createClient(), [])
   const [language, setLanguage] = useState<SurveyLanguage>('pt')
 
   const isSurveyForm =
@@ -59,19 +59,30 @@ export function FormPlayer({ form }: FormPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const skipNextValidationRef = useRef(false)
 
+  // Check if this respondent already submitted from this browser
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        if (window.localStorage.getItem(`survey_submitted_${form.id}`) === 'true') {
+          setIsSubmitted(true)
+        }
+      } catch {
+        // Ignore localStorage access restrictions
+      }
+    }
+  }, [form.id])
+
   const currentQuestion = questions[currentIndex]
   const isLastQuestion = currentIndex === questions.length - 1
   const isFirstQuestion = !hasStarted
   const progress = !hasStarted ? 0 : questions.length > 0 ? ((currentIndex + 1) / questions.length) * 100 : 0
 
-  const validateCurrentQuestion = () => {
-    if (!hasStarted || !currentQuestion) return true
+  const validateQuestionById = (question: QuestionConfig): boolean => {
+    const answer = answers[question.id]
     
-    const answer = answers[currentQuestion.id]
-    
-    if (currentQuestion.required) {
-      if (currentQuestion.type === 'matrix') {
-        const rows = currentQuestion.matrixRows || []
+    if (question.required) {
+      if (question.type === 'matrix') {
+        const rows = question.matrixRows || []
         const currentAnswers = (typeof answer === 'object' && answer !== null && !Array.isArray(answer))
           ? (answer as Record<string, string>)
           : {}
@@ -79,7 +90,7 @@ export function FormPlayer({ form }: FormPlayerProps) {
         if (answeredCount < rows.length) {
           setErrors(prev => ({
             ...prev,
-            [currentQuestion.id]: activeTranslation
+            [question.id]: activeTranslation
               ? activeTranslation.rateAllTopicsError
               : 'Por favor, avalie todos os tópicos antes de continuar',
           }))
@@ -89,7 +100,7 @@ export function FormPlayer({ form }: FormPlayerProps) {
         if (answer === undefined || answer === null || answer === '') {
           setErrors(prev => ({
             ...prev,
-            [currentQuestion.id]: activeTranslation
+            [question.id]: activeTranslation
               ? activeTranslation.requiredFieldError
               : 'Este campo é obrigatório',
           }))
@@ -99,7 +110,7 @@ export function FormPlayer({ form }: FormPlayerProps) {
         if (Array.isArray(answer) && answer.length === 0) {
           setErrors(prev => ({
             ...prev,
-            [currentQuestion.id]: activeTranslation
+            [question.id]: activeTranslation
               ? activeTranslation.selectAtLeastOneError
               : 'Selecione pelo menos uma opção',
           }))
@@ -109,12 +120,12 @@ export function FormPlayer({ form }: FormPlayerProps) {
     }
 
     // Type-specific validation
-    if (answer && currentQuestion.type === 'email') {
+    if (answer && question.type === 'email') {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(String(answer))) {
         setErrors(prev => ({
           ...prev,
-          [currentQuestion.id]: activeTranslation
+          [question.id]: activeTranslation
             ? activeTranslation.validEmailError
             : 'Por favor, insira um e-mail válido',
         }))
@@ -122,13 +133,13 @@ export function FormPlayer({ form }: FormPlayerProps) {
       }
     }
 
-    if (answer && currentQuestion.type === 'url') {
+    if (answer && question.type === 'url') {
       try {
         new URL(String(answer))
       } catch {
         setErrors(prev => ({
           ...prev,
-          [currentQuestion.id]: activeTranslation
+          [question.id]: activeTranslation
             ? activeTranslation.validUrlError
             : 'Por favor, insira uma URL válida',
         }))
@@ -136,12 +147,12 @@ export function FormPlayer({ form }: FormPlayerProps) {
       }
     }
 
-    if (answer && currentQuestion.type === 'phone') {
+    if (answer && question.type === 'phone') {
       const phoneRegex = /^[+]?[\d\s\-().]+$/
       if (!phoneRegex.test(String(answer))) {
         setErrors(prev => ({
           ...prev,
-          [currentQuestion.id]: activeTranslation
+          [question.id]: activeTranslation
             ? activeTranslation.validPhoneError
             : 'Por favor, insira um telefone válido',
         }))
@@ -149,36 +160,87 @@ export function FormPlayer({ form }: FormPlayerProps) {
       }
     }
 
-    // Clear error if valid
-    setErrors(prev => {
-      const newErrors = { ...prev }
-      delete newErrors[currentQuestion.id]
-      return newErrors
-    })
     return true
   }
 
+  const validateAllQuestions = (): boolean => {
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i]
+      if (!validateQuestionById(q)) {
+        setCurrentIndex(i)
+        return false
+      }
+    }
+    return true
+  }
+
+  const validateCurrentQuestion = () => {
+    if (!hasStarted || !currentQuestion) return true
+    const isValid = validateQuestionById(currentQuestion)
+    if (isValid) {
+      setErrors(prev => {
+        const newErrors = { ...prev }
+        delete newErrors[currentQuestion.id]
+        return newErrors
+      })
+    }
+    return isValid
+  }
+
   const handleSubmit = async () => {
-    if (!validateCurrentQuestion()) return
+    if (!validateAllQuestions()) {
+      toast.error(
+        language === 'en'
+          ? 'Please answer all required questions before submitting.'
+          : 'Por favor, responda a todas as perguntas obrigatórias antes de enviar.'
+      )
+      return
+    }
     
     setIsSubmitting(true)
     
-    const insertData = {
-      form_id: form.id,
-      answers: {
-        ...answers,
-        _survey_language: language,
-      },
-    }
-    const { error } = await supabase
-      .from('responses')
-      .insert(insertData as never)
+    try {
+      const { respondentHash, clientToken } = await generateRespondentFingerprint(form.id)
 
-    if (error) {
-      toast.error(language === 'en' ? 'Error submitting response' : 'Erro ao registrar resposta')
+      const result = await submitResponseAction({
+        formId: form.id,
+        answers: {
+          ...answers,
+          _survey_language: language,
+        },
+        respondentHash,
+        clientToken,
+      })
+
+      if (result.success) {
+        if (typeof window !== 'undefined') {
+          try {
+            window.localStorage.setItem(`survey_submitted_${form.id}`, 'true')
+          } catch {
+            // Ignore storage errors
+          }
+        }
+        setIsSubmitted(true)
+      } else {
+        if (result.validationErrors) {
+          setErrors(prev => ({ ...prev, ...result.validationErrors }))
+          const firstErrorId = Object.keys(result.validationErrors)[0]
+          const errIdx = questions.findIndex(q => q.id === firstErrorId)
+          if (errIdx >= 0) {
+            setCurrentIndex(errIdx)
+          }
+        }
+        toast.error(
+          result.error ||
+            (language === 'en' ? 'Error submitting response' : 'Erro ao registrar resposta')
+        )
+      }
+    } catch {
+      toast.error(
+        language === 'en' ? 'Error submitting response' : 'Erro ao registrar resposta'
+      )
+    } finally {
       setIsSubmitting(false)
-    } else {
-      setIsSubmitted(true)
     }
   }
 
