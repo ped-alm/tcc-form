@@ -21,6 +21,7 @@ export type QuestionType =
   | 'yes_no'
   | 'file_upload'
   | 'url'
+  | 'matrix'
 
 // Form status
 export type FormStatus = 'draft' | 'published' | 'closed'
@@ -44,15 +45,32 @@ export interface ThemeConfig {
   fontFamily: string
 }
 
+export interface MatrixRow {
+  id: string
+  label: string
+  description?: string
+}
+
+export interface MatrixColumn {
+  id: string
+  label: string
+  shortLabel?: string
+}
+
 // Question configuration
 export interface QuestionConfig {
   id: string
   type: QuestionType
   title: string
   description?: string
+  displayNumber?: string | number
   required: boolean
   // Type-specific options
   options?: string[] // For dropdown and checkboxes
+  maxSelect?: number // Maximum selectable options for checkboxes
+  exclusiveOptions?: string[] // Options that when selected deselect all others
+  matrixRows?: MatrixRow[] // For matrix grid
+  matrixColumns?: MatrixColumn[] // For matrix grid
   minValue?: number // For rating (1-5 stars) or opinion_scale (1-10)
   maxValue?: number
   allowedFileTypes?: string[] // For file_upload

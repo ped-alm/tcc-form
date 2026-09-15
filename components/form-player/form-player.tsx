@@ -7,7 +7,7 @@ import { getTheme, getThemeCSSVariables, themeList } from '@/lib/themes'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
-import { ChevronUp, ChevronDown, Check, ArrowRight, Palette } from 'lucide-react'
+import { ChevronUp, ChevronDown, Check, ArrowRight, Palette, Globe } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +16,13 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { QuestionRenderer } from './question-renderer'
 import { toast } from 'sonner'
+import {
+  surveyTranslations,
+  SurveyLanguage,
+  convertAnswersLanguage,
+  EXAMPLE_FORM_ID,
+  EXAMPLE_FORM_SLUG,
+} from '@/lib/example-form'
 
 interface FormPlayerProps {
   form: Form
@@ -23,7 +30,26 @@ interface FormPlayerProps {
 
 export function FormPlayer({ form }: FormPlayerProps) {
   const supabase = createClient()
-  const questions = (form.questions as QuestionConfig[]) || []
+  const [language, setLanguage] = useState<SurveyLanguage>('pt')
+
+  const isSurveyForm =
+    form.id === EXAMPLE_FORM_ID ||
+    form.slug === EXAMPLE_FORM_SLUG ||
+    Boolean(form.questions && (form.questions as QuestionConfig[]).some(q => q.id === 'q01-consentimento'))
+
+  const activeTranslation = isSurveyForm ? surveyTranslations[language] : null
+  const questions = activeTranslation ? activeTranslation.questions : ((form.questions as QuestionConfig[]) || [])
+  const formTitle = activeTranslation ? activeTranslation.title : form.title
+  const formDescription = activeTranslation ? activeTranslation.description : form.description
+  const badgeText = activeTranslation ? activeTranslation.badge : 'Pesquisa de TCC • PUC Minas • ~7 min'
+
+  const handleLanguageChange = (newLang: SurveyLanguage) => {
+    if (newLang === language) return
+    setAnswers(prev => convertAnswersLanguage(prev, language, newLang))
+    setLanguage(newLang)
+    setErrors({})
+  }
+
   const [currentThemePreset, setCurrentThemePreset] = useState<ThemePreset>(form.theme || 'ocean')
   const theme = getTheme(currentThemePreset)
   const themeStyles = getThemeCSSVariables(theme)
@@ -35,6 +61,8 @@ export function FormPlayer({ form }: FormPlayerProps) {
   }, [form.theme])
 
   const [currentIndex, setCurrentIndex] = useState(0)
+  const [hasStarted, setHasStarted] = useState(false)
+  const [terminationReason, setTerminationReason] = useState<'consent_declined' | 'not_eligible' | null>(null)
   const [answers, setAnswers] = useState<Record<string, Json>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
@@ -46,23 +74,50 @@ export function FormPlayer({ form }: FormPlayerProps) {
 
   const currentQuestion = questions[currentIndex]
   const isLastQuestion = currentIndex === questions.length - 1
-  const isFirstQuestion = currentIndex === 0
-  const progress = questions.length > 0 ? ((currentIndex + 1) / questions.length) * 100 : 0
+  const isFirstQuestion = !hasStarted
+  const progress = !hasStarted ? 0 : questions.length > 0 ? ((currentIndex + 1) / questions.length) * 100 : 0
 
   const validateCurrentQuestion = useCallback(() => {
-    if (!currentQuestion) return true
+    if (!hasStarted || !currentQuestion) return true
     
     const answer = answers[currentQuestion.id]
     
     if (currentQuestion.required) {
-      if (answer === undefined || answer === null || answer === '') {
-        setErrors({ ...errors, [currentQuestion.id]: 'This field is required' })
-        return false
-      }
-      
-      if (Array.isArray(answer) && answer.length === 0) {
-        setErrors({ ...errors, [currentQuestion.id]: 'Please select at least one option' })
-        return false
+      if (currentQuestion.type === 'matrix') {
+        const rows = currentQuestion.matrixRows || []
+        const currentAnswers = (typeof answer === 'object' && answer !== null && !Array.isArray(answer))
+          ? (answer as Record<string, string>)
+          : {}
+        const answeredCount = rows.filter(r => Boolean(currentAnswers[r.id])).length
+        if (answeredCount < rows.length) {
+          setErrors({
+            ...errors,
+            [currentQuestion.id]: activeTranslation
+              ? activeTranslation.rateAllTopicsError
+              : 'Por favor, avalie todos os tópicos antes de continuar',
+          })
+          return false
+        }
+      } else {
+        if (answer === undefined || answer === null || answer === '') {
+          setErrors({
+            ...errors,
+            [currentQuestion.id]: activeTranslation
+              ? activeTranslation.requiredFieldError
+              : 'Este campo é obrigatório',
+          })
+          return false
+        }
+        
+        if (Array.isArray(answer) && answer.length === 0) {
+          setErrors({
+            ...errors,
+            [currentQuestion.id]: activeTranslation
+              ? activeTranslation.selectAtLeastOneError
+              : 'Selecione pelo menos uma opção',
+          })
+          return false
+        }
       }
     }
 
@@ -70,7 +125,12 @@ export function FormPlayer({ form }: FormPlayerProps) {
     if (answer && currentQuestion.type === 'email') {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(String(answer))) {
-        setErrors({ ...errors, [currentQuestion.id]: 'Please enter a valid email address' })
+        setErrors({
+          ...errors,
+          [currentQuestion.id]: activeTranslation
+            ? activeTranslation.validEmailError
+            : 'Por favor, insira um e-mail válido',
+        })
         return false
       }
     }
@@ -79,7 +139,12 @@ export function FormPlayer({ form }: FormPlayerProps) {
       try {
         new URL(String(answer))
       } catch {
-        setErrors({ ...errors, [currentQuestion.id]: 'Please enter a valid URL' })
+        setErrors({
+          ...errors,
+          [currentQuestion.id]: activeTranslation
+            ? activeTranslation.validUrlError
+            : 'Por favor, insira uma URL válida',
+        })
         return false
       }
     }
@@ -87,7 +152,12 @@ export function FormPlayer({ form }: FormPlayerProps) {
     if (answer && currentQuestion.type === 'phone') {
       const phoneRegex = /^[+]?[\d\s\-().]+$/
       if (!phoneRegex.test(String(answer))) {
-        setErrors({ ...errors, [currentQuestion.id]: 'Please enter a valid phone number' })
+        setErrors({
+          ...errors,
+          [currentQuestion.id]: activeTranslation
+            ? activeTranslation.validPhoneError
+            : 'Por favor, insira um telefone válido',
+        })
         return false
       }
     }
@@ -97,14 +167,57 @@ export function FormPlayer({ form }: FormPlayerProps) {
     delete newErrors[currentQuestion.id]
     setErrors(newErrors)
     return true
-  }, [currentQuestion, answers, errors])
+  }, [hasStarted, currentQuestion, answers, errors, activeTranslation])
+
+  const handleSubmit = useCallback(async () => {
+    if (!validateCurrentQuestion()) return
+    
+    setIsSubmitting(true)
+    
+    const insertData = {
+      form_id: form.id,
+      answers: {
+        ...answers,
+        _survey_language: language,
+      },
+    }
+    const { error } = await supabase
+      .from('responses')
+      .insert(insertData as never)
+
+    if (error) {
+      toast.error(language === 'en' ? 'Error submitting response' : 'Erro ao registrar resposta')
+      setIsSubmitting(false)
+    } else {
+      setIsSubmitted(true)
+    }
+  }, [validateCurrentQuestion, form.id, answers, supabase, language])
 
   const goToNext = useCallback((skipValidation?: boolean) => {
+    if (!hasStarted) {
+      setHasStarted(true)
+      return
+    }
+
     // Check both the parameter and the ref for skip validation
     const shouldSkip = skipValidation || skipNextValidationRef.current
     skipNextValidationRef.current = false // Reset the ref
     
     if (!shouldSkip && !validateCurrentQuestion()) return
+
+    // Early termination routing for Q1 and Q2 (checks both Portuguese and English)
+    const q1Answer = answers['q01-consentimento']
+    if (currentQuestion?.id === 'q01-consentimento' && (q1Answer === 'Não concordo.' || q1Answer === 'I do not agree.')) {
+      setTerminationReason('consent_declined')
+      setIsSubmitted(true)
+      return
+    }
+    const q2Answer = answers['q02-atuacao-software']
+    if (currentQuestion?.id === 'q02-atuacao-software' && (q2Answer === 'Não.' || q2Answer === 'No.')) {
+      setTerminationReason('not_eligible')
+      setIsSubmitted(true)
+      return
+    }
     
     if (isLastQuestion) {
       handleSubmit()
@@ -112,33 +225,17 @@ export function FormPlayer({ form }: FormPlayerProps) {
       setDirection(1)
       setCurrentIndex(prev => Math.min(prev + 1, questions.length - 1))
     }
-  }, [isLastQuestion, questions.length, validateCurrentQuestion])
+  }, [hasStarted, isLastQuestion, questions.length, validateCurrentQuestion, currentQuestion, answers, handleSubmit])
 
   const goToPrevious = useCallback(() => {
+    if (!hasStarted) return
     setDirection(-1)
-    setCurrentIndex(prev => Math.max(prev - 1, 0))
-  }, [])
-
-  const handleSubmit = async () => {
-    if (!validateCurrentQuestion()) return
-    
-    setIsSubmitting(true)
-    
-    const insertData = {
-      form_id: form.id,
-      answers: answers,
-    }
-    const { error } = await supabase
-      .from('responses')
-      .insert(insertData as never)
-
-    if (error) {
-      toast.error('Failed to submit response')
-      setIsSubmitting(false)
+    if (currentIndex === 0) {
+      setHasStarted(false)
     } else {
-      setIsSubmitted(true)
+      setCurrentIndex(prev => Math.max(prev - 1, 0))
     }
-  }
+  }, [hasStarted, currentIndex])
 
   const updateAnswer = (questionId: string, value: Json) => {
     setAnswers(prev => ({ ...prev, [questionId]: value }))
@@ -156,6 +253,11 @@ export function FormPlayer({ form }: FormPlayerProps) {
       if (isSubmitted || isSubmitting) return
       
       if (e.key === 'Enter' && !e.shiftKey) {
+        if (!hasStarted) {
+          e.preventDefault()
+          setHasStarted(true)
+          return
+        }
         // Don't submit on enter for textarea
         if (currentQuestion?.type === 'long_text') {
           if (e.metaKey || e.ctrlKey) {
@@ -181,7 +283,7 @@ export function FormPlayer({ form }: FormPlayerProps) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [currentQuestion, goToNext, goToPrevious, isSubmitted, isSubmitting])
+  }, [hasStarted, currentQuestion, goToNext, goToPrevious, isSubmitted, isSubmitting])
 
   // Scroll/wheel navigation
   useEffect(() => {
@@ -217,8 +319,19 @@ export function FormPlayer({ form }: FormPlayerProps) {
     return () => window.removeEventListener('wheel', handleWheel)
   }, [goToNext, goToPrevious, isSubmitted, isSubmitting])
 
-  // Thank you screen
+  // Thank you / Termination screen
   if (isSubmitted) {
+    let thankTitle = activeTranslation?.completedSuccessTitle || form.thank_you_message || 'Obrigado pela participação!'
+    let thankDesc = activeTranslation?.completedSuccessDesc || 'Sua resposta foi registrada com sucesso. Agradecemos sua colaboração com a pesquisa de TCC da PUC Minas.'
+
+    if (terminationReason === 'consent_declined') {
+      thankTitle = activeTranslation?.completedConsentDeclinedTitle || 'Participação encerrada'
+      thankDesc = activeTranslation?.completedConsentDeclinedDesc || 'Agradecemos o seu tempo. Sua preferência de não concordar com o termo de participação foi registrada e nenhuma informação adicional foi solicitada.'
+    } else if (terminationReason === 'not_eligible') {
+      thankTitle = activeTranslation?.completedNotEligibleTitle || 'Agradecemos o seu interesse'
+      thankDesc = activeTranslation?.completedNotEligibleDesc || 'Esta pesquisa tem como público-alvo profissionais que atuaram diretamente no desenvolvimento de software de pelo menos um jogo digital. Como você indicou que não atende a esse critério, o questionário foi encerrado.'
+    }
+
     return (
       <div 
         className="min-h-screen flex items-center justify-center p-6"
@@ -246,14 +359,31 @@ export function FormPlayer({ form }: FormPlayerProps) {
             className="text-3xl md:text-4xl font-bold mb-4"
             style={{ color: theme.textColor }}
           >
-            {form.thank_you_message}
+            {thankTitle}
           </h1>
           <p 
-            className="text-lg opacity-70"
+            className="text-base sm:text-lg opacity-75 leading-relaxed mb-8"
             style={{ color: theme.textColor }}
           >
-            Your response has been recorded.
+            {thankDesc}
           </p>
+
+          <Button
+            variant="outline"
+            onClick={() => {
+              setIsSubmitted(false)
+              setTerminationReason(null)
+              setCurrentIndex(0)
+              setHasStarted(false)
+            }}
+            className="rounded-xl border px-6 py-2.5 text-sm font-medium transition-all hover:scale-105"
+            style={{
+              borderColor: `${theme.textColor}30`,
+              color: theme.textColor,
+            }}
+          >
+            {activeTranslation?.backToStart || 'Voltar ao início'}
+          </Button>
           
           {/* OpenForm branding */}
           <motion.div
@@ -263,11 +393,11 @@ export function FormPlayer({ form }: FormPlayerProps) {
             className="mt-12"
           >
             <a 
-              href="/dashboard"
+              href="/"
               className="inline-flex items-center gap-2 text-sm opacity-50 hover:opacity-70 transition-opacity"
               style={{ color: theme.textColor }}
             >
-              <span>Made with</span>
+              <span>Powered by</span>
               <span className="font-semibold">OpenForm</span>
             </a>
           </motion.div>
@@ -333,143 +463,324 @@ export function FormPlayer({ form }: FormPlayerProps) {
       </div>
 
       {/* Main content */}
-      <main className="flex-1 flex items-center justify-center p-6 pt-12">
-        <div className="w-full max-w-2xl">
+      <main className="flex-1 flex items-center justify-center p-6 pt-12 pb-24">
+        <div className={`w-full ${hasStarted && currentQuestion?.type === 'matrix' ? 'max-w-4xl lg:max-w-5xl' : 'max-w-2xl'}`}>
           <AnimatePresence mode="wait" custom={direction}>
-            <motion.div
-              key={currentIndex}
-              custom={direction}
-              variants={slideVariants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{ duration: 0.3, ease: 'easeInOut' }}
-            >
-              {/* Question number */}
-              <motion.div 
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.1 }}
-                className="mb-6 flex items-center gap-2"
+            {!hasStarted ? (
+              <motion.div
+                key="welcome"
+                custom={direction}
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.3, ease: 'easeInOut' }}
+                className="space-y-6"
               >
-                <span 
-                  className="text-base font-medium"
-                  style={{ color: theme.primaryColor }}
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div 
+                    className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold tracking-wide border"
+                    style={{
+                      borderColor: `${theme.primaryColor}40`,
+                      backgroundColor: `${theme.primaryColor}15`,
+                      color: theme.primaryColor,
+                    }}
+                  >
+                    {badgeText}
+                  </div>
+
+                  {/* Language switcher pill in welcome header */}
+                  {isSurveyForm && (
+                    <div 
+                      className="inline-flex items-center p-1 rounded-full border text-xs font-medium"
+                      style={{
+                        borderColor: `${theme.textColor}25`,
+                        backgroundColor: `${theme.textColor}08`,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleLanguageChange('pt')}
+                        className={`px-3 py-1 rounded-full transition-all flex items-center gap-1.5 ${
+                          language === 'pt' ? 'font-semibold shadow-sm' : 'opacity-60 hover:opacity-100'
+                        }`}
+                        style={{
+                          backgroundColor: language === 'pt' ? theme.primaryColor : 'transparent',
+                          color: language === 'pt' ? theme.backgroundColor : theme.textColor,
+                        }}
+                      >
+                        <span>🇧🇷</span>
+                        <span>Português</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleLanguageChange('en')}
+                        className={`px-3 py-1 rounded-full transition-all flex items-center gap-1.5 ${
+                          language === 'en' ? 'font-semibold shadow-sm' : 'opacity-60 hover:opacity-100'
+                        }`}
+                        style={{
+                          backgroundColor: language === 'en' ? theme.primaryColor : 'transparent',
+                          color: language === 'en' ? theme.backgroundColor : theme.textColor,
+                        }}
+                      >
+                        <span>🇺🇸</span>
+                        <span>English</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <h1 
+                  className="text-2xl sm:text-3xl md:text-4xl font-bold leading-tight"
+                  style={{ color: theme.textColor }}
                 >
-                  {currentIndex + 1}
-                </span>
-                <ArrowRight className="w-4 h-4" style={{ color: theme.primaryColor }} />
-              </motion.div>
+                  {formTitle}
+                </h1>
 
-              {/* Question */}
-              <motion.h2 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15 }}
-                className="text-2xl md:text-3xl lg:text-4xl font-bold mb-3"
-                style={{ color: theme.textColor }}
-              >
-                {currentQuestion.title || 'Untitled question'}
-                {currentQuestion.required && (
-                  <span style={{ color: theme.primaryColor }} className="ml-1">*</span>
+                {formDescription && (
+                  <div 
+                    className="text-sm sm:text-base opacity-80 leading-relaxed whitespace-pre-line border-l-2 pl-4 py-1"
+                    style={{ 
+                      color: theme.textColor,
+                      borderColor: theme.primaryColor,
+                    }}
+                  >
+                    {formDescription}
+                  </div>
                 )}
-              </motion.h2>
 
-              {currentQuestion.description && (
-                <motion.p 
+                {/* Dedicated Language Preference Selection */}
+                {isSurveyForm && (
+                  <div 
+                    className="p-4 sm:p-5 rounded-2xl border space-y-3 transition-all"
+                    style={{
+                      borderColor: `${theme.primaryColor}35`,
+                      backgroundColor: `${theme.primaryColor}0c`,
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Globe className="w-4 h-4 shrink-0" style={{ color: theme.primaryColor }} />
+                      <span className="text-xs sm:text-sm font-semibold tracking-wide uppercase opacity-80" style={{ color: theme.textColor }}>
+                        {activeTranslation?.languagePrompt || 'Prefere responder em qual idioma?'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleLanguageChange('pt')}
+                        className="flex items-center justify-between p-3.5 rounded-xl border-2 text-left transition-all hover:scale-[1.01] active:scale-[0.99]"
+                        style={{
+                          borderColor: language === 'pt' ? theme.primaryColor : `${theme.textColor}20`,
+                          backgroundColor: language === 'pt' ? `${theme.primaryColor}18` : 'transparent',
+                          color: theme.textColor,
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl leading-none">🇧🇷</span>
+                          <div>
+                            <div className="font-semibold text-sm sm:text-base">Português</div>
+                            <div className="text-xs opacity-65">Responder pesquisa em português</div>
+                          </div>
+                        </div>
+                        {language === 'pt' && (
+                          <div 
+                            className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 shadow-sm"
+                            style={{ backgroundColor: theme.primaryColor, color: theme.backgroundColor }}
+                          >
+                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          </div>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleLanguageChange('en')}
+                        className="flex items-center justify-between p-3.5 rounded-xl border-2 text-left transition-all hover:scale-[1.01] active:scale-[0.99]"
+                        style={{
+                          borderColor: language === 'en' ? theme.primaryColor : `${theme.textColor}20`,
+                          backgroundColor: language === 'en' ? `${theme.primaryColor}18` : 'transparent',
+                          color: theme.textColor,
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl leading-none">🇺🇸</span>
+                          <div>
+                            <div className="font-semibold text-sm sm:text-base">English</div>
+                            <div className="text-xs opacity-65">Answer survey in English</div>
+                          </div>
+                        </div>
+                        {language === 'en' && (
+                          <div 
+                            className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 shadow-sm"
+                            style={{ backgroundColor: theme.primaryColor, color: theme.backgroundColor }}
+                          >
+                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          </div>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-2 flex items-center gap-4">
+                  <Button
+                    onClick={() => setHasStarted(true)}
+                    className="h-12 px-7 text-base font-semibold rounded-xl shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    style={{ 
+                      backgroundColor: theme.primaryColor,
+                      color: theme.backgroundColor,
+                    }}
+                  >
+                    {activeTranslation?.startButton || 'Iniciar pesquisa'}
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </Button>
+
+                  <span 
+                    className="text-sm opacity-50"
+                    style={{ color: theme.textColor }}
+                  >
+                    {activeTranslation?.pressEnter || 'pressione'} <kbd className="font-mono font-medium">{activeTranslation?.enterKey || 'Enter ↵'}</kbd>
+                  </span>
+                </div>
+              </motion.div>
+            ) : currentQuestion ? (
+              <motion.div
+                key={currentIndex}
+                custom={direction}
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.3, ease: 'easeInOut' }}
+              >
+                {/* Question number */}
+                <motion.div 
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="mb-4 flex items-center gap-2"
+                >
+                  <span 
+                    className="text-base font-semibold"
+                    style={{ color: theme.primaryColor }}
+                  >
+                    {currentQuestion.displayNumber ?? (currentIndex + 1)}
+                  </span>
+                  <ArrowRight className="w-4 h-4" style={{ color: theme.primaryColor }} />
+                </motion.div>
+
+                {/* Question */}
+                <motion.h2 
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                  className="text-lg md:text-xl opacity-70 mb-8"
+                  transition={{ delay: 0.15 }}
+                  className="text-xl sm:text-2xl md:text-3xl font-bold mb-3 leading-snug"
                   style={{ color: theme.textColor }}
                 >
-                  {currentQuestion.description}
-                </motion.p>
-              )}
+                  {currentQuestion.title || 'Untitled question'}
+                  {currentQuestion.required && (
+                    <span style={{ color: theme.primaryColor }} className="ml-1">*</span>
+                  )}
+                </motion.h2>
 
-              {/* Answer input */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.25 }}
-                className="mt-8"
-              >
-                <QuestionRenderer
-                  question={currentQuestion}
-                  value={answers[currentQuestion.id]}
-                  onChange={(value) => updateAnswer(currentQuestion.id, value)}
-                  theme={theme}
-                  error={errors[currentQuestion.id]}
-                  onSubmit={(skipValidation?: boolean) => {
-                    if (skipValidation) {
-                      skipNextValidationRef.current = true
-                    }
-                    goToNext(skipValidation)
-                  }}
-                  onClearError={() => {
-                    if (errors[currentQuestion.id]) {
-                      const newErrors = { ...errors }
-                      delete newErrors[currentQuestion.id]
-                      setErrors(newErrors)
-                    }
-                  }}
-                />
-              </motion.div>
-
-              {/* Error message */}
-              <AnimatePresence>
-                {errors[currentQuestion.id] && (
-                  <motion.p
-                    initial={{ opacity: 0, y: -10 }}
+                {currentQuestion.description && (
+                  <motion.p 
+                    initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="mt-4 text-sm font-medium"
-                    style={{ color: '#EF4444' }}
+                    transition={{ delay: 0.2 }}
+                    className="text-sm sm:text-base opacity-75 mb-6 whitespace-pre-line leading-relaxed"
+                    style={{ color: theme.textColor }}
                   >
-                    {errors[currentQuestion.id]}
+                    {currentQuestion.description}
                   </motion.p>
                 )}
-              </AnimatePresence>
 
-              {/* Action buttons */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
-                className="mt-8 flex items-center gap-4"
-              >
-                <Button
-                  onClick={() => goToNext()}
-                  disabled={isSubmitting}
-                  className="h-12 px-6 text-base font-medium"
-                  style={{ 
-                    backgroundColor: theme.primaryColor,
-                    color: theme.backgroundColor,
-                  }}
+                {/* Answer input */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.25 }}
+                  className="mt-6"
                 >
-                  {isSubmitting ? (
-                    'Submitting...'
-                  ) : isLastQuestion ? (
-                    <>
-                      Submit
-                      <Check className="w-4 h-4 ml-2" />
-                    </>
-                  ) : (
-                    <>
-                      OK
-                      <Check className="w-4 h-4 ml-2" />
-                    </>
+                  <QuestionRenderer
+                    question={currentQuestion}
+                    value={answers[currentQuestion.id]}
+                    onChange={(value) => updateAnswer(currentQuestion.id, value)}
+                    theme={theme}
+                    language={language}
+                    error={errors[currentQuestion.id]}
+                    onSubmit={(skipValidation?: boolean) => {
+                      if (skipValidation) {
+                        skipNextValidationRef.current = true
+                      }
+                      goToNext(skipValidation)
+                    }}
+                    onClearError={() => {
+                      if (errors[currentQuestion.id]) {
+                        const newErrors = { ...errors }
+                        delete newErrors[currentQuestion.id]
+                        setErrors(newErrors)
+                      }
+                    }}
+                  />
+                </motion.div>
+
+                {/* Error message */}
+                <AnimatePresence>
+                  {errors[currentQuestion.id] && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="mt-4 text-sm font-medium"
+                      style={{ color: '#EF4444' }}
+                    >
+                      {errors[currentQuestion.id]}
+                    </motion.p>
                   )}
-                </Button>
+                </AnimatePresence>
 
-                <span 
-                  className="text-sm opacity-50"
-                  style={{ color: theme.textColor }}
+                {/* Action buttons */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                  className="mt-8 flex items-center gap-4"
                 >
-                  press <kbd className="font-mono font-medium">Enter ↵</kbd>
-                </span>
+                  <Button
+                    onClick={() => goToNext()}
+                    disabled={isSubmitting}
+                    className="h-12 px-6 text-base font-medium rounded-xl transition-all hover:scale-[1.02]"
+                    style={{ 
+                      backgroundColor: theme.primaryColor,
+                      color: theme.backgroundColor,
+                    }}
+                  >
+                    {isSubmitting ? (
+                      activeTranslation?.submittingButton || 'Enviando...'
+                    ) : isLastQuestion ? (
+                      <>
+                        {activeTranslation?.submitButton || 'Enviar'}
+                        <Check className="w-4 h-4 ml-2" />
+                      </>
+                    ) : (
+                      <>
+                        {activeTranslation?.nextButton || 'OK'}
+                        <Check className="w-4 h-4 ml-2" />
+                      </>
+                    )}
+                  </Button>
+
+                  <span 
+                    className="text-sm opacity-50"
+                    style={{ color: theme.textColor }}
+                  >
+                    {activeTranslation?.pressEnter || 'pressione'} <kbd className="font-mono font-medium">{activeTranslation?.enterKey || 'Enter ↵'}</kbd>
+                  </span>
+                </motion.div>
               </motion.div>
-            </motion.div>
+            ) : null}
           </AnimatePresence>
         </div>
       </main>
@@ -497,6 +808,45 @@ export function FormPlayer({ form }: FormPlayerProps) {
           >
             <ChevronDown className="w-5 h-5" />
           </Button>
+
+          {isSurveyForm && (
+            <div 
+              className="flex items-center p-0.5 rounded-lg border text-xs font-medium ml-1"
+              style={{ 
+                borderColor: `${theme.textColor}25`,
+                backgroundColor: `${theme.textColor}08`,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => handleLanguageChange('pt')}
+                className={`px-2 py-1 rounded transition-all text-xs font-semibold ${
+                  language === 'pt' ? 'shadow-sm' : 'opacity-50 hover:opacity-100'
+                }`}
+                style={{
+                  backgroundColor: language === 'pt' ? theme.primaryColor : 'transparent',
+                  color: language === 'pt' ? theme.backgroundColor : theme.textColor,
+                }}
+                title="Responder em Português"
+              >
+                PT
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLanguageChange('en')}
+                className={`px-2 py-1 rounded transition-all text-xs font-semibold ${
+                  language === 'en' ? 'shadow-sm' : 'opacity-50 hover:opacity-100'
+                }`}
+                style={{
+                  backgroundColor: language === 'en' ? theme.primaryColor : 'transparent',
+                  color: language === 'en' ? theme.backgroundColor : theme.textColor,
+                }}
+                title="Answer in English"
+              >
+                EN
+              </button>
+            </div>
+          )}
 
           {/* Theme switcher button
           <DropdownMenu>
@@ -547,8 +897,8 @@ export function FormPlayer({ form }: FormPlayerProps) {
         {/* Progress bar with percentage */}
         <div 
           className="flex items-center gap-2 sm:gap-3"
-          aria-label={`Progress: ${Math.round(progress)}% completed`}
-          title={`${Math.round(progress)}% completed`}
+          aria-label={activeTranslation ? activeTranslation.progressTooltip(Math.round(progress)) : `Progress: ${Math.round(progress)}% completed`}
+          title={activeTranslation ? activeTranslation.progressTooltip(Math.round(progress)) : `${Math.round(progress)}% completed`}
         >
           <div className="w-24 sm:w-36 md:w-48">
             <Progress 

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { motion } from 'framer-motion'
 import { Star, Upload, Check, X, FileText, Image as ImageIcon, Loader2, AlertCircle } from 'lucide-react'
+import { toast } from 'sonner'
 
 interface FileUploadValue {
   name: string
@@ -176,6 +177,188 @@ function FileUploadQuestion({ question, value, onChange, theme }: FileUploadQues
   )
 }
 
+interface MatrixQuestionProps {
+  question: QuestionConfig
+  value: Json
+  onChange: (value: Json) => void
+  theme: ThemeConfig
+  onClearError?: () => void
+}
+
+function MatrixQuestion({ question, value, onChange, theme, onClearError }: MatrixQuestionProps) {
+  const rows = question.matrixRows || []
+  const columns = question.matrixColumns || []
+  const currentAnswers = (typeof value === 'object' && value !== null && !Array.isArray(value))
+    ? (value as Record<string, string>)
+    : {}
+
+  const handleSelect = (rowId: string, colId: string) => {
+    const nextAnswers = { ...currentAnswers, [rowId]: colId }
+    onChange(nextAnswers)
+    onClearError?.()
+  }
+
+  const answeredCount = rows.filter(r => Boolean(currentAnswers[r.id])).length
+
+  return (
+    <div className="w-full space-y-4">
+      {/* Progress indicator for matrix */}
+      <div 
+        className="flex items-center justify-between text-xs sm:text-sm font-medium px-1"
+        style={{ color: theme.textColor }}
+      >
+        <span className="opacity-70">Avaliação dos tópicos</span>
+        <span 
+          className="px-2.5 py-0.5 rounded-full text-xs font-semibold tabular-nums"
+          style={{ 
+            backgroundColor: `${theme.primaryColor}20`,
+            color: theme.primaryColor,
+          }}
+        >
+          {answeredCount} de {rows.length} preenchidos
+        </span>
+      </div>
+
+      {/* Desktop / Tablet view */}
+      <div 
+        className="hidden md:block overflow-x-auto rounded-2xl border p-4 shadow-sm"
+        style={{ 
+          borderColor: `${theme.textColor}15`,
+          backgroundColor: `${theme.textColor}05`,
+        }}
+      >
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="border-b" style={{ borderColor: `${theme.textColor}15` }}>
+              <th className="text-left py-3.5 px-4 font-semibold text-sm" style={{ color: theme.textColor }}>
+                Tópico
+              </th>
+              {columns.map((col) => (
+                <th
+                  key={col.id}
+                  className="text-center py-3.5 px-2 font-medium text-xs sm:text-sm"
+                  style={{ color: theme.textColor }}
+                >
+                  <div className="font-semibold whitespace-nowrap">{col.shortLabel || col.label}</div>
+                  {col.shortLabel && col.shortLabel !== col.label && (
+                    <div className="text-[11px] opacity-60 font-normal whitespace-nowrap mt-0.5">{col.label}</div>
+                  )}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const selectedCol = currentAnswers[row.id]
+              const isRowComplete = Boolean(selectedCol)
+              return (
+                <tr
+                  key={row.id}
+                  className="border-b last:border-b-0 transition-colors"
+                  style={{ 
+                    borderColor: `${theme.textColor}10`,
+                    backgroundColor: isRowComplete ? `${theme.primaryColor}06` : 'transparent',
+                  }}
+                >
+                  <td className="py-3 px-4 text-left align-middle max-w-xs">
+                    <div className="font-medium text-sm sm:text-base leading-snug" style={{ color: theme.textColor }}>
+                      {row.label}
+                    </div>
+                    {row.description && (
+                      <div className="text-xs opacity-65 mt-1 leading-normal" style={{ color: theme.textColor }}>
+                        {row.description}
+                      </div>
+                    )}
+                  </td>
+                  {columns.map((col) => {
+                    const isSelected = selectedCol === col.id
+                    return (
+                      <td key={col.id} className="py-3 px-2 text-center align-middle">
+                        <button
+                          type="button"
+                          onClick={() => handleSelect(row.id, col.id)}
+                          className={`w-9 h-9 mx-auto rounded-full flex items-center justify-center transition-all cursor-pointer border-2 ${
+                            isSelected
+                              ? 'scale-105 shadow-sm'
+                              : 'hover:scale-105 opacity-65 hover:opacity-100'
+                          }`}
+                          style={{
+                            borderColor: isSelected ? theme.primaryColor : `${theme.textColor}35`,
+                            backgroundColor: isSelected ? theme.primaryColor : 'transparent',
+                            color: isSelected ? theme.backgroundColor : theme.textColor,
+                          }}
+                          aria-label={`${row.label}: ${col.label}`}
+                          title={`${row.label}: ${col.label}`}
+                        >
+                          {isSelected ? (
+                            <Check className="w-4 h-4 stroke-[3]" />
+                          ) : (
+                            <span className="text-xs font-semibold">{col.shortLabel || col.label.charAt(0)}</span>
+                          )}
+                        </button>
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile view: Stacked card per row */}
+      <div className="md:hidden space-y-3">
+        {rows.map((row) => {
+          const selectedCol = currentAnswers[row.id]
+          const isRowComplete = Boolean(selectedCol)
+          return (
+            <div
+              key={row.id}
+              className="p-3.5 rounded-xl border transition-colors space-y-2.5"
+              style={{
+                borderColor: isRowComplete ? theme.primaryColor : `${theme.textColor}20`,
+                backgroundColor: isRowComplete ? `${theme.primaryColor}08` : `${theme.textColor}05`,
+              }}
+            >
+              <div>
+                <div className="font-semibold text-sm" style={{ color: theme.textColor }}>
+                  {row.label}
+                </div>
+                {row.description && (
+                  <div className="text-xs opacity-70 mt-0.5" style={{ color: theme.textColor }}>
+                    {row.description}
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 pt-1">
+                {columns.map((col) => {
+                  const isSelected = selectedCol === col.id
+                  return (
+                    <button
+                      key={col.id}
+                      type="button"
+                      onClick={() => handleSelect(row.id, col.id)}
+                      className="py-2 px-1 rounded-lg border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5"
+                      style={{
+                        borderColor: isSelected ? theme.primaryColor : `${theme.textColor}25`,
+                        backgroundColor: isSelected ? theme.primaryColor : 'transparent',
+                        color: isSelected ? theme.backgroundColor : theme.textColor,
+                      }}
+                    >
+                      <span className="text-xs font-semibold">{col.shortLabel || col.label}</span>
+                      {isSelected && <Check className="w-3 h-3" />}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 interface QuestionRendererProps {
   question: QuestionConfig
   value: Json
@@ -184,6 +367,7 @@ interface QuestionRendererProps {
   error?: string
   onSubmit: (skipValidation?: boolean) => void
   onClearError?: () => void
+  language?: 'pt' | 'en'
 }
 
 export function QuestionRenderer({ 
@@ -193,9 +377,11 @@ export function QuestionRenderer({
   theme,
   error,
   onSubmit,
-  onClearError
+  onClearError,
+  language = 'pt'
 }: QuestionRendererProps) {
   const [isFocused, setIsFocused] = useState(false)
+  const isEnglish = language === 'en'
 
   const inputStyles = {
     borderColor: error ? '#EF4444' : isFocused ? theme.primaryColor : `${theme.textColor}30`,
@@ -216,7 +402,7 @@ export function QuestionRenderer({
           onChange={(e) => onChange(e.target.value)}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
-          placeholder={question.placeholder || 'Type your answer here...'}
+          placeholder={question.placeholder || (isEnglish ? 'Type your answer here...' : 'Digite sua resposta aqui...')}
           className="text-xl md:text-2xl h-auto py-3 px-0 border-0 border-b-2 rounded-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:opacity-40"
           style={inputStyles}
           autoFocus
@@ -230,7 +416,7 @@ export function QuestionRenderer({
           onChange={(e) => onChange(e.target.value)}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
-          placeholder={question.placeholder || 'Type your answer here...'}
+          placeholder={question.placeholder || (isEnglish ? 'Type your answer here...' : 'Digite sua resposta aqui...')}
           className="text-lg md:text-xl min-h-[150px] p-4 border-2 rounded-xl bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:opacity-40 resize-none"
           style={inputStyles}
           autoFocus
@@ -299,21 +485,43 @@ export function QuestionRenderer({
       )
 
     case 'checkboxes':
-      const selectedValues = Array.isArray(value) ? value : []
+      const selectedValues: string[] = Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []
+      const exclusiveOptions = question.exclusiveOptions || []
+      const maxSelect = question.maxSelect
+
       return (
         <div className="space-y-3">
           {(question.options || []).map((option, index) => {
             const isSelected = selectedValues.includes(option)
+            const isExclusive = exclusiveOptions.includes(option)
             return (
               <motion.button
                 key={index}
+                type="button"
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
                 onClick={() => {
-                  const newValues = isSelected
-                    ? selectedValues.filter(v => v !== option)
-                    : [...selectedValues, option]
+                  let newValues: string[]
+                  if (isSelected) {
+                    newValues = selectedValues.filter(v => v !== option)
+                  } else {
+                    if (isExclusive) {
+                      newValues = [option]
+                    } else {
+                      const withoutExclusive = selectedValues.filter(v => !exclusiveOptions.includes(v))
+                      if (maxSelect && withoutExclusive.length >= maxSelect) {
+                        toast.error(
+                          isEnglish
+                            ? `You can select up to ${maxSelect} options`
+                            : `Você pode selecionar no máximo ${maxSelect} opções`
+                        )
+                        return
+                      }
+                      newValues = [...withoutExclusive, option]
+                    }
+                  }
                   onChange(newValues)
+                  onClearError?.()
                 }}
                 className="w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all"
                 style={{
@@ -337,14 +545,31 @@ export function QuestionRenderer({
                     </span>
                   )}
                 </div>
-                <span className="text-lg">{option}</span>
+                <span className="text-base sm:text-lg">{option}</span>
               </motion.button>
             )
           })}
-          <p className="text-sm opacity-50 mt-2" style={{ color: theme.textColor }}>
-            Select all that apply
+          <p className="text-sm opacity-60 mt-2 font-medium" style={{ color: theme.textColor }}>
+            {maxSelect
+              ? isEnglish
+                ? `Select up to ${maxSelect} options (${selectedValues.length}/${maxSelect} selected)`
+                : `Selecione até ${maxSelect} opções (${selectedValues.length}/${maxSelect} selecionadas)`
+              : isEnglish
+                ? 'Select all options that apply'
+                : 'Selecione todas as opções que se aplicam'}
           </p>
         </div>
+      )
+
+    case 'matrix':
+      return (
+        <MatrixQuestion
+          question={question}
+          value={value}
+          onChange={onChange}
+          theme={theme}
+          onClearError={onClearError}
+        />
       )
 
     case 'yes_no':
