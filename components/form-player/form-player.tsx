@@ -344,39 +344,6 @@ export function FormPlayer({ form }: FormPlayerProps) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [hasStarted, currentQuestion, isSubmitted, isSubmitting])
 
-  // Scroll/wheel navigation
-  useEffect(() => {
-    let lastScrollTime = 0
-    const scrollThreshold = 500 // ms between scroll navigations
-    const deltaThreshold = 50 // minimum scroll delta to trigger navigation
-
-    const handleWheel = (e: WheelEvent) => {
-      if (isSubmitted || isSubmitting) return
-      
-      // Don't interfere with scrollable inputs like textarea
-      const target = e.target as HTMLElement
-      if (target.tagName === 'TEXTAREA') return
-      
-      const now = Date.now()
-      if (now - lastScrollTime < scrollThreshold) return
-      
-      // Check if scroll delta is significant enough
-      if (Math.abs(e.deltaY) < deltaThreshold) return
-      
-      if (e.deltaY > 0) {
-        // Scrolling down - go to next question
-        goToNextRef.current()
-      } else {
-        // Scrolling up - go to previous question
-        goToPreviousRef.current()
-      }
-      
-      lastScrollTime = now
-    }
-
-    window.addEventListener('wheel', handleWheel, { passive: true })
-    return () => window.removeEventListener('wheel', handleWheel)
-  }, [isSubmitted, isSubmitting])
 
   // Thank you / Termination screen
   if (isSubmitted) {

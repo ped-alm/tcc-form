@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { notFound } from 'next/navigation'
 import { FormPlayer } from '@/components/form-player/form-player'
 import { Form } from '@/lib/database.types'
@@ -9,59 +10,9 @@ interface FormPageProps {
   params: Promise<{ slug: string }>
 }
 
-export async function generateMetadata({ params }: FormPageProps) {
-  const { slug } = await params
-
+const getFormBySlug = cache(async (slug: string): Promise<Form | null> => {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    if (slug === EXAMPLE_FORM_SLUG) {
-      return {
-        title: exampleForm.title,
-        description: exampleForm.description || 'Fill out this form',
-      }
-    }
-    return { title: 'Form Not Found' }
-  }
-
-  try {
-    const { createClient } = await import('@/lib/supabase/server')
-    const supabase = await createClient()
-
-    const { data } = await supabase
-      .from('forms')
-      .select('title, description')
-      .eq('slug', slug)
-      .eq('status', 'published')
-      .maybeSingle()
-
-    const form = (data as { title: string; description: string | null } | null) ?? (slug === EXAMPLE_FORM_SLUG ? exampleForm : null)
-
-    if (!form) {
-      return { title: 'Form Not Found' }
-    }
-
-    return {
-      title: form.title || 'Form',
-      description: form.description || 'Fill out this form',
-    }
-  } catch {
-    if (slug === EXAMPLE_FORM_SLUG) {
-      return {
-        title: exampleForm.title,
-        description: exampleForm.description || 'Fill out this form',
-      }
-    }
-    return { title: 'Form Not Found' }
-  }
-}
-
-export default async function FormPage({ params }: FormPageProps) {
-  const { slug } = await params
-
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    if (slug === EXAMPLE_FORM_SLUG) {
-      return <FormPlayer form={exampleForm} />
-    }
-    notFound()
+    return slug === EXAMPLE_FORM_SLUG ? exampleForm : null
   }
 
   try {
@@ -75,18 +26,38 @@ export default async function FormPage({ params }: FormPageProps) {
       .eq('status', 'published')
       .maybeSingle()
 
-    const form = (data as Form | null) ?? (slug === EXAMPLE_FORM_SLUG ? exampleForm : null)
-
-    if (error || !form) {
-      notFound()
+    if (error || !data) {
+      return slug === EXAMPLE_FORM_SLUG ? exampleForm : null
     }
 
-    return <FormPlayer form={form} />
+    return data as Form
   } catch {
-    if (slug === EXAMPLE_FORM_SLUG) {
-      return <FormPlayer form={exampleForm} />
-    }
+    return slug === EXAMPLE_FORM_SLUG ? exampleForm : null
+  }
+})
+
+export async function generateMetadata({ params }: FormPageProps) {
+  const { slug } = await params
+  const form = await getFormBySlug(slug)
+
+  if (!form) {
+    return { title: 'Form Not Found' }
+  }
+
+  return {
+    title: form.title || 'Form',
+    description: form.description || 'Fill out this form',
+  }
+}
+
+export default async function FormPage({ params }: FormPageProps) {
+  const { slug } = await params
+  const form = await getFormBySlug(slug)
+
+  if (!form) {
     notFound()
   }
+
+  return <FormPlayer form={form} />
 }
 
