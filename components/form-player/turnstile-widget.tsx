@@ -56,6 +56,16 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetPro
     const containerRef = useRef<HTMLDivElement>(null)
     const widgetIdRef = useRef<string | null>(null)
 
+    const onTokenRef = useRef(onToken)
+    const onErrorRef = useRef(onError)
+    const onExpireRef = useRef(onExpire)
+
+    useEffect(() => {
+      onTokenRef.current = onToken
+      onErrorRef.current = onError
+      onExpireRef.current = onExpire
+    })
+
     useImperativeHandle(ref, () => ({
       reset: () => {
         if (widgetIdRef.current && window.turnstile) {
@@ -90,13 +100,13 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetPro
           widgetIdRef.current = window.turnstile.render(containerRef.current, {
             sitekey: siteKey,
             callback: (token: string) => {
-              if (isMounted) onToken(token)
+              if (isMounted) onTokenRef.current(token)
             },
             'error-callback': (err?: string) => {
-              if (isMounted && onError) onError(err)
+              if (isMounted && onErrorRef.current) onErrorRef.current(err)
             },
             'expired-callback': () => {
-              if (isMounted && onExpire) onExpire()
+              if (isMounted && onExpireRef.current) onExpireRef.current()
             },
             theme,
             size,
@@ -151,7 +161,7 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetPro
           }
         }
       }
-    }, [siteKey, onToken, onError, onExpire, theme, size, language])
+    }, [siteKey, theme, size, language])
 
     // If siteKey is not provided (e.g. dev/local test environment), render nothing
     if (!siteKey) {

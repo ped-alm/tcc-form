@@ -7,7 +7,7 @@ This directory contains individual task issue files generated from the comprehen
 | # | Severity | Title | File(s) | Category | Type |
 |---|---|---|---|---|---|
 | 01 | **CRITICAL** | [Fix Database Views Bypassing RLS on Survey Responses](./01-critical-views-bypass-rls.md) | `supabase/schema.sql`, `supabase/normalized-schema.sql` | Supabase Security / Data Privacy | Resolved |
-| 02 | **CRITICAL** | [Fix Cloudflare Turnstile Re-render Loop & Token Invalidation](./02-critical-turnstile-rerender-loop.md) | `components/form-player/turnstile-widget.tsx`, `form-player.tsx` | React / UX & Correctness | Verified Issue |
+| 02 | **CRITICAL** | [Fix Cloudflare Turnstile Re-render Loop & Token Invalidation](./02-critical-turnstile-rerender-loop.md) | `components/form-player/turnstile-widget.tsx`, `form-player.tsx` | React / UX & Correctness | Resolved |
 | 03 | **HIGH** | [Enforce Database-Level Unique Constraint on Respondent Hash](./03-high-database-missing-unique-constraint-race-condition.md) | `supabase/schema.sql`, `submit-response.ts` | Database / Concurrency | Verified Issue |
 | 04 | **HIGH** | [Fix Silent Deduplication Failure Under Anon Client Role](./04-high-supabase-silent-deduplication-failure-anon-rls.md) | `app/actions/submit-response.ts`, `.env.example` | Supabase Security & Architecture | Verified Issue |
 | 05 | **HIGH** | [Secure Overly Permissive `TO authenticated USING (true)` Policies](./05-high-security-overly-permissive-authenticated-policies.md) | `supabase/schema.sql`, `supabase/normalized-schema.sql` | Supabase Security / Authorization | Verified Issue |

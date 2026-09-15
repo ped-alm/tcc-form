@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Form, QuestionConfig, Json } from '@/lib/database.types'
 import { getTheme, getThemeCSSVariables } from '@/lib/themes'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -61,6 +61,18 @@ export function FormPlayer({ form }: FormPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const turnstileRef = useRef<TurnstileWidgetRef>(null)
   const skipNextValidationRef = useRef(false)
+
+  const handleTurnstileToken = useCallback((token: string) => {
+    setTurnstileToken(token)
+  }, [])
+
+  const handleTurnstileError = useCallback(() => {
+    setTurnstileToken(null)
+  }, [])
+
+  const handleTurnstileExpire = useCallback(() => {
+    setTurnstileToken(null)
+  }, [])
 
   // Check if this respondent already submitted from this browser
   useEffect(() => {
@@ -787,9 +799,9 @@ export function FormPlayer({ form }: FormPlayerProps) {
                 {isLastQuestion && (
                   <TurnstileWidget
                     ref={turnstileRef}
-                    onToken={(token) => setTurnstileToken(token)}
-                    onError={() => setTurnstileToken(null)}
-                    onExpire={() => setTurnstileToken(null)}
+                    onToken={handleTurnstileToken}
+                    onError={handleTurnstileError}
+                    onExpire={handleTurnstileExpire}
                     theme={['lavender', 'minimal'].includes(form.theme || 'ocean') ? 'light' : 'dark'}
                     language={language}
                     className="mt-6 mb-2"

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { FormPlayer } from '@/components/form-player/form-player'
 import { Form } from '@/lib/database.types'
 
@@ -85,5 +85,59 @@ describe('FormPlayer Component', () => {
 
     // Transition to question 2
     expect(screen.getByText('Any additional comments?')).toBeInTheDocument()
+  })
+
+  it('maintains Turnstile widget and does not recreate it when user types on the last question', () => {
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = 'test-site-key'
+    let renderCount = 0
+    let removeCount = 0
+    let capturedCallback: ((token: string) => void) | null = null
+
+    window.turnstile = {
+      render: vi.fn((_el, options) => {
+        renderCount++
+        capturedCallback = options.callback
+        return 'widget-last-q'
+      }),
+      reset: vi.fn(),
+      remove: vi.fn(() => {
+        removeCount++
+      }),
+    }
+
+    render(<FormPlayer form={mockForm} />)
+
+    // Advance to question 1
+    fireEvent.click(screen.getByRole('button', { name: /Iniciar pesquisa/i }))
+    // Fill Q1
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Frontend Engineer' } })
+    fireEvent.click(screen.getByRole('button', { name: /OK/i }))
+
+    // Now on Q2 (last question)
+    expect(screen.getByText('Any additional comments?')).toBeInTheDocument()
+    expect(renderCount).toBe(1)
+    expect(removeCount).toBe(0)
+
+    // Simulate Turnstile challenge being solved first
+    act(() => {
+      capturedCallback?.('solved-turnstile-token')
+    })
+
+    // Now type in Q2's input
+    const q2Input = screen.getByRole('textbox')
+    fireEvent.change(q2Input, { target: { value: 'H' } })
+    fireEvent.change(q2Input, { target: { value: 'He' } })
+    fireEvent.change(q2Input, { target: { value: 'Hello' } })
+
+    // Verify Turnstile widget was NOT removed or re-rendered
+    expect(renderCount).toBe(1)
+    expect(removeCount).toBe(0)
+
+    // Submit button should NOT be disabled because turnstileToken was NOT cleared!
+    const submitBtn = screen.getByRole('button', { name: /Enviar|Submit/i })
+    expect(submitBtn).not.toBeDisabled()
+
+    delete (window as unknown as { turnstile?: unknown }).turnstile
+    delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
   })
 })
