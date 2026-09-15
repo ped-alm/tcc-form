@@ -1,19 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Form, QuestionConfig, Json, ThemePreset } from '@/lib/database.types'
-import { getTheme, getThemeCSSVariables, themeList } from '@/lib/themes'
+import { Form, QuestionConfig, Json } from '@/lib/database.types'
+import { getTheme, getThemeCSSVariables } from '@/lib/themes'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
-import { ChevronUp, ChevronDown, Check, ArrowRight, Palette, Globe } from 'lucide-react'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import { ChevronUp, ChevronDown, Check, ArrowRight, Globe } from 'lucide-react'
 import { QuestionRenderer } from './question-renderer'
 import { toast } from 'sonner'
 import {
@@ -29,7 +23,7 @@ interface FormPlayerProps {
 }
 
 export function FormPlayer({ form }: FormPlayerProps) {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const [language, setLanguage] = useState<SurveyLanguage>('pt')
 
   const isSurveyForm =
@@ -50,15 +44,8 @@ export function FormPlayer({ form }: FormPlayerProps) {
     setErrors({})
   }
 
-  const [currentThemePreset, setCurrentThemePreset] = useState<ThemePreset>(form.theme || 'ocean')
-  const theme = getTheme(currentThemePreset)
+  const theme = getTheme(form.theme || 'ocean')
   const themeStyles = getThemeCSSVariables(theme)
-
-  useEffect(() => {
-    if (form.theme) {
-      setCurrentThemePreset(form.theme)
-    }
-  }, [form.theme])
 
   const [currentIndex, setCurrentIndex] = useState(0)
   const [hasStarted, setHasStarted] = useState(false)
@@ -77,7 +64,7 @@ export function FormPlayer({ form }: FormPlayerProps) {
   const isFirstQuestion = !hasStarted
   const progress = !hasStarted ? 0 : questions.length > 0 ? ((currentIndex + 1) / questions.length) * 100 : 0
 
-  const validateCurrentQuestion = useCallback(() => {
+  const validateCurrentQuestion = () => {
     if (!hasStarted || !currentQuestion) return true
     
     const answer = answers[currentQuestion.id]
@@ -90,32 +77,32 @@ export function FormPlayer({ form }: FormPlayerProps) {
           : {}
         const answeredCount = rows.filter(r => Boolean(currentAnswers[r.id])).length
         if (answeredCount < rows.length) {
-          setErrors({
-            ...errors,
+          setErrors(prev => ({
+            ...prev,
             [currentQuestion.id]: activeTranslation
               ? activeTranslation.rateAllTopicsError
               : 'Por favor, avalie todos os tópicos antes de continuar',
-          })
+          }))
           return false
         }
       } else {
         if (answer === undefined || answer === null || answer === '') {
-          setErrors({
-            ...errors,
+          setErrors(prev => ({
+            ...prev,
             [currentQuestion.id]: activeTranslation
               ? activeTranslation.requiredFieldError
               : 'Este campo é obrigatório',
-          })
+          }))
           return false
         }
         
         if (Array.isArray(answer) && answer.length === 0) {
-          setErrors({
-            ...errors,
+          setErrors(prev => ({
+            ...prev,
             [currentQuestion.id]: activeTranslation
               ? activeTranslation.selectAtLeastOneError
               : 'Selecione pelo menos uma opção',
-          })
+          }))
           return false
         }
       }
@@ -125,12 +112,12 @@ export function FormPlayer({ form }: FormPlayerProps) {
     if (answer && currentQuestion.type === 'email') {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(String(answer))) {
-        setErrors({
-          ...errors,
+        setErrors(prev => ({
+          ...prev,
           [currentQuestion.id]: activeTranslation
             ? activeTranslation.validEmailError
             : 'Por favor, insira um e-mail válido',
-        })
+        }))
         return false
       }
     }
@@ -139,12 +126,12 @@ export function FormPlayer({ form }: FormPlayerProps) {
       try {
         new URL(String(answer))
       } catch {
-        setErrors({
-          ...errors,
+        setErrors(prev => ({
+          ...prev,
           [currentQuestion.id]: activeTranslation
             ? activeTranslation.validUrlError
             : 'Por favor, insira uma URL válida',
-        })
+        }))
         return false
       }
     }
@@ -152,24 +139,26 @@ export function FormPlayer({ form }: FormPlayerProps) {
     if (answer && currentQuestion.type === 'phone') {
       const phoneRegex = /^[+]?[\d\s\-().]+$/
       if (!phoneRegex.test(String(answer))) {
-        setErrors({
-          ...errors,
+        setErrors(prev => ({
+          ...prev,
           [currentQuestion.id]: activeTranslation
             ? activeTranslation.validPhoneError
             : 'Por favor, insira um telefone válido',
-        })
+        }))
         return false
       }
     }
 
     // Clear error if valid
-    const newErrors = { ...errors }
-    delete newErrors[currentQuestion.id]
-    setErrors(newErrors)
+    setErrors(prev => {
+      const newErrors = { ...prev }
+      delete newErrors[currentQuestion.id]
+      return newErrors
+    })
     return true
-  }, [hasStarted, currentQuestion, answers, errors, activeTranslation])
+  }
 
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = async () => {
     if (!validateCurrentQuestion()) return
     
     setIsSubmitting(true)
@@ -191,9 +180,9 @@ export function FormPlayer({ form }: FormPlayerProps) {
     } else {
       setIsSubmitted(true)
     }
-  }, [validateCurrentQuestion, form.id, answers, supabase, language])
+  }
 
-  const goToNext = useCallback((skipValidation?: boolean) => {
+  const goToNext = (skipValidation?: boolean) => {
     if (!hasStarted) {
       setHasStarted(true)
       return
@@ -225,9 +214,9 @@ export function FormPlayer({ form }: FormPlayerProps) {
       setDirection(1)
       setCurrentIndex(prev => Math.min(prev + 1, questions.length - 1))
     }
-  }, [hasStarted, isLastQuestion, questions.length, validateCurrentQuestion, currentQuestion, answers, handleSubmit])
+  }
 
-  const goToPrevious = useCallback(() => {
+  const goToPrevious = () => {
     if (!hasStarted) return
     setDirection(-1)
     if (currentIndex === 0) {
@@ -235,7 +224,15 @@ export function FormPlayer({ form }: FormPlayerProps) {
     } else {
       setCurrentIndex(prev => Math.max(prev - 1, 0))
     }
-  }, [hasStarted, currentIndex])
+  }
+
+  const goToNextRef = useRef(goToNext)
+  const goToPreviousRef = useRef(goToPrevious)
+
+  useEffect(() => {
+    goToNextRef.current = goToNext
+    goToPreviousRef.current = goToPrevious
+  })
 
   const updateAnswer = (questionId: string, value: Json) => {
     setAnswers(prev => ({ ...prev, [questionId]: value }))
@@ -262,28 +259,28 @@ export function FormPlayer({ form }: FormPlayerProps) {
         if (currentQuestion?.type === 'long_text') {
           if (e.metaKey || e.ctrlKey) {
             e.preventDefault()
-            goToNext()
+            goToNextRef.current()
           }
           return
         }
         e.preventDefault()
-        goToNext()
+        goToNextRef.current()
       }
       
       if (e.key === 'ArrowUp' || (e.key === 'Tab' && e.shiftKey)) {
         e.preventDefault()
-        goToPrevious()
+        goToPreviousRef.current()
       }
       
       if (e.key === 'ArrowDown') {
         e.preventDefault()
-        goToNext()
+        goToNextRef.current()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [hasStarted, currentQuestion, goToNext, goToPrevious, isSubmitted, isSubmitting])
+  }, [hasStarted, currentQuestion, isSubmitted, isSubmitting])
 
   // Scroll/wheel navigation
   useEffect(() => {
@@ -306,10 +303,10 @@ export function FormPlayer({ form }: FormPlayerProps) {
       
       if (e.deltaY > 0) {
         // Scrolling down - go to next question
-        goToNext()
+        goToNextRef.current()
       } else {
         // Scrolling up - go to previous question
-        goToPrevious()
+        goToPreviousRef.current()
       }
       
       lastScrollTime = now
@@ -317,7 +314,7 @@ export function FormPlayer({ form }: FormPlayerProps) {
 
     window.addEventListener('wheel', handleWheel, { passive: true })
     return () => window.removeEventListener('wheel', handleWheel)
-  }, [goToNext, goToPrevious, isSubmitted, isSubmitting])
+  }, [isSubmitted, isSubmitting])
 
   // Thank you / Termination screen
   if (isSubmitted) {
@@ -392,14 +389,13 @@ export function FormPlayer({ form }: FormPlayerProps) {
             transition={{ delay: 0.5 }}
             className="mt-12"
           >
-            <a 
-              href="/"
-              className="inline-flex items-center gap-2 text-sm opacity-50 hover:opacity-70 transition-opacity"
+            <span 
+              className="inline-flex items-center gap-2 text-sm opacity-50"
               style={{ color: theme.textColor }}
             >
               <span>Powered by</span>
               <span className="font-semibold">OpenForm</span>
-            </a>
+            </span>
           </motion.div>
         </motion.div>
       </div>
@@ -847,51 +843,6 @@ export function FormPlayer({ form }: FormPlayerProps) {
               </button>
             </div>
           )}
-
-          {/* Theme switcher button
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-10 px-3 flex items-center gap-2 rounded-lg border border-transparent hover:border-black/10 dark:hover:border-white/10"
-                style={{ color: theme.textColor }}
-                aria-label="Change theme"
-              >
-                <Palette className="w-4 h-4" />
-                <span className="text-xs font-medium">{theme.name}</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="start" className="w-44 p-1.5 shadow-xl bg-white text-slate-900 border border-slate-200">
-              <div className="px-2 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                Select Theme
-              </div>
-              {themeList.map((t) => (
-                <DropdownMenuItem
-                  key={t.id}
-                  onClick={() => setCurrentThemePreset(t.id)}
-                  className="flex items-center justify-between cursor-pointer py-1.5 px-2 rounded text-xs hover:bg-slate-100"
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="w-3.5 h-3.5 rounded-full border border-slate-300 shrink-0 flex items-center justify-center overflow-hidden"
-                      style={{ backgroundColor: t.backgroundColor }}
-                    >
-                      <span
-                        className="w-1.5 h-1.5 rounded-full"
-                        style={{ backgroundColor: t.primaryColor }}
-                      />
-                    </span>
-                    <span>{t.name}</span>
-                  </div>
-                  {t.id === currentThemePreset && (
-                    <Check className="w-3.5 h-3.5 text-blue-600 ml-2" />
-                  )}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          */}
         </div>
 
         {/* Progress bar with percentage */}
@@ -921,13 +872,12 @@ export function FormPlayer({ form }: FormPlayerProps) {
         </div>
 
         {/* OpenForm branding */}
-        <a 
-          href="/dashboard"
-          className="text-sm opacity-50 hover:opacity-70 transition-opacity"
+        <span 
+          className="text-sm opacity-50"
           style={{ color: theme.textColor }}
         >
           Powered by <span className="font-semibold">OpenForm</span>
-        </a>
+        </span>
       </footer>
     </div>
   )

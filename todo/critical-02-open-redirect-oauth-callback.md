@@ -40,3 +40,6 @@ Use this helper when constructing the redirect response:
 ```typescript
 return NextResponse.redirect(getSafeRedirectUrl(next, origin))
 ```
+
+### Resolution
+Fixed by completely removing the auth system and `app/auth/callback/route.ts` as the application was converted to a form-only system without administrative login/dashboard routes. Data is accessed directly in Supabase.

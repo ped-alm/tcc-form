@@ -110,7 +110,7 @@ export interface Database {
       forms: {
         Row: {
           id: string
-          user_id: string
+          user_id: string | null
           title: string
           description: string | null
           slug: string
@@ -123,7 +123,7 @@ export interface Database {
         }
         Insert: {
           id?: string
-          user_id: string
+          user_id?: string | null
           title: string
           description?: string | null
           slug: string
@@ -135,6 +135,7 @@ export interface Database {
           updated_at?: string
         }
         Update: {
+          user_id?: string | null
           title?: string
           description?: string | null
           slug?: string

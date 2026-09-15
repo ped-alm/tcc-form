@@ -1,4 +1,4 @@
-import { Form, QuestionConfig } from './database.types'
+import { Form, QuestionConfig, Json } from './database.types'
 
 // Example form used as the app homepage.
 // Seeded with the TCC research survey about Software Engineering practices in Game Development.
@@ -570,15 +570,15 @@ export const surveyTranslations: Record<SurveyLanguage, SurveyTranslationStrings
 
 // Convert answers between languages without data loss
 export function convertAnswersLanguage(
-  answers: Record<string, any>,
+  answers: Record<string, Json>,
   fromLang: SurveyLanguage,
   toLang: SurveyLanguage
-): Record<string, any> {
+): Record<string, Json> {
   if (fromLang === toLang) return answers
 
   const fromQuestions = surveyTranslations[fromLang].questions
   const toQuestions = surveyTranslations[toLang].questions
-  const converted: Record<string, any> = { ...answers }
+  const converted: Record<string, Json> = { ...answers }
 
   for (const qFrom of fromQuestions) {
     const qTo = toQuestions.find(q => q.id === qFrom.id)
@@ -608,7 +608,7 @@ export function convertAnswersLanguage(
 
 export const exampleForm: Form = {
   id: EXAMPLE_FORM_ID,
-  user_id: '00000000-0000-4000-8000-000000000000',
+  user_id: null,
   title: 'Práticas de engenharia de software no desenvolvimento de jogos',
   description: 'Pesquisa de TCC da PUC Minas  |  Tempo estimado de resposta de até 7 minutos\n\nEsta pesquisa busca compreender o que profissionais de jogos conhecem e utilizam em engenharia de software. A participação é voluntária. O formulário não solicita nome, e-mail, empresa ou jogo. Os resultados serão apresentados em conjunto e utilizados para fins acadêmicos.\n\nResponsável: Pedro Henrique de Almeida Costa. Contato: pedro.costa.1217022@sga.pucminas.br.',
   slug: EXAMPLE_FORM_SLUG,

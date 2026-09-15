@@ -21,19 +21,16 @@ CREATE TABLE profiles (
 -- Forms table
 CREATE TABLE forms (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
   title TEXT NOT NULL DEFAULT 'Untitled Form',
   description TEXT,
-  slug TEXT NOT NULL,
+  slug TEXT UNIQUE NOT NULL,
   status form_status DEFAULT 'draft' NOT NULL,
   theme theme_preset DEFAULT 'minimal' NOT NULL,
   questions JSONB DEFAULT '[]'::jsonb NOT NULL,
   thank_you_message TEXT DEFAULT 'Thank you for your response!' NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-  
-  -- Ensure slug is unique per user
-  UNIQUE(user_id, slug)
+  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
 -- Create index for faster slug lookups

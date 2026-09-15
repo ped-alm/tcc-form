@@ -21,15 +21,13 @@ begin
    order by created_at
    limit 1;
 
-  if owner_id is null then
-    raise exception 'No user found in auth.users. Sign in once (Google or Magic Link) and run this script again.';
+  if owner_id is not null then
+    -- The profile is normally created by the on_auth_user_created trigger,
+    -- but make sure it exists for users created before the trigger was installed.
+    insert into public.profiles (id, email)
+    values (owner_id, coalesce(owner_email, ''))
+    on conflict (id) do nothing;
   end if;
-
-  -- The profile is normally created by the on_auth_user_created trigger,
-  -- but make sure it exists for users created before the trigger was installed.
-  insert into public.profiles (id, email)
-  values (owner_id, coalesce(owner_email, ''))
-  on conflict (id) do nothing;
 
   insert into public.forms (
     id,
@@ -273,7 +271,7 @@ Responsável: Pedro Henrique de Almeida Costa. Contato: pedro.costa.1217022@sga.
       }
     ]'::jsonb
   )
-  on conflict (user_id, slug) do update
+  on conflict (slug) do update
     set title             = excluded.title,
         description       = excluded.description,
         status            = excluded.status,
@@ -281,5 +279,5 @@ Responsável: Pedro Henrique de Almeida Costa. Contato: pedro.costa.1217022@sga.
         thank_you_message = excluded.thank_you_message,
         questions         = excluded.questions;
 
-  raise notice 'TCC survey form ready at / and /f/praticas-es-jogos (owner: %)', coalesce(owner_email, owner_id::text);
+  raise notice 'TCC survey form ready at / and /f/praticas-es-jogos (owner: %)', coalesce(owner_email, coalesce(owner_id::text, 'none'));
 end $$;
