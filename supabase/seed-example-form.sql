@@ -1,49 +1,27 @@
--- Example form seed for tcc-form (OpenForm)
+-- Example form seed for tcc-form (OpenForm - Single-Form Architecture)
 -- Run this in the Supabase SQL Editor AFTER supabase/schema.sql.
 --
 -- Themed form: Pesquisa de TCC - Práticas de engenharia de software no desenvolvimento de jogos.
 -- The same id, slug and questions live in lib/example-form.ts, which is used as
 -- the local fallback when this seed has not been applied yet.
 --
--- The form is owned by the first user found in auth.users, so sign in at least
--- once (/login) before running this script.
 -- After running it, the form is available at / and at /f/praticas-es-jogos
 
-do $$
-declare
-  owner_id uuid;
-  owner_email text;
-  example_form_id uuid := '11111111-1111-4111-8111-111111111111';
-begin
-  select id, email
-    into owner_id, owner_email
-    from auth.users
-   order by created_at
-   limit 1;
-
-  if owner_id is not null then
-    -- The profile is normally created by the on_auth_user_created trigger,
-    -- but make sure it exists for users created before the trigger was installed.
-    insert into public.profiles (id, email)
-    values (owner_id, coalesce(owner_email, ''))
-    on conflict (id) do nothing;
-  end if;
-
-  insert into public.forms (
-    id,
-    user_id,
-    title,
-    description,
-    slug,
-    status,
-    theme,
-    thank_you_message,
-    questions
-  )
-  values (
-    example_form_id,
-    owner_id,
-    'Práticas de engenharia de software no desenvolvimento de jogos',
+insert into public.forms (
+  id,
+  is_singleton,
+  title,
+  description,
+  slug,
+  status,
+  theme,
+  thank_you_message,
+  questions
+)
+values (
+  '11111111-1111-4111-8111-111111111111',
+  true,
+  'Práticas de engenharia de software no desenvolvimento de jogos',
     'Pesquisa de TCC da PUC Minas  |  Tempo estimado de resposta de até 7 minutos
 
 Esta pesquisa busca compreender o que profissionais de jogos conhecem e utilizam em engenharia de software. A participação é voluntária. O formulário não solicita nome, e-mail, empresa ou jogo. Os resultados serão apresentados em conjunto e utilizados para fins acadêmicos.
@@ -271,13 +249,13 @@ Responsável: Pedro Henrique de Almeida Costa. Contato: pedro.costa.1217022@sga.
       }
     ]'::jsonb
   )
-  on conflict (slug) do update
-    set title             = excluded.title,
+  on conflict (id) do update
+    set is_singleton      = true,
+        title             = excluded.title,
         description       = excluded.description,
+        slug              = excluded.slug,
         status            = excluded.status,
         theme             = excluded.theme,
         thank_you_message = excluded.thank_you_message,
-        questions         = excluded.questions;
-
-  raise notice 'TCC survey form ready at / and /f/praticas-es-jogos (owner: %)', coalesce(owner_email, coalesce(owner_id::text, 'none'));
-end $$;
+        questions         = excluded.questions,
+        updated_at        = now();

@@ -1,6 +1,6 @@
 import { FormPlayer } from '@/components/form-player/form-player'
 import { Form } from '@/lib/database.types'
-import { exampleForm, EXAMPLE_FORM_SLUG } from '@/lib/example-form'
+import { exampleForm } from '@/lib/example-form'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,10 +9,9 @@ export const metadata = {
   description: exampleForm.description ?? undefined,
 }
 
-// Loads the example form from Supabase when it is already seeded
-// (supabase/seed-example-form.sql); otherwise falls back to the local definition
-// so the form is always rendered.
-async function getExampleForm(): Promise<Form> {
+// Loads the single form from Supabase when seeded;
+// otherwise falls back to the local definition so the form is always rendered.
+async function getForm(): Promise<Form> {
   try {
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       return exampleForm
@@ -24,7 +23,6 @@ async function getExampleForm(): Promise<Form> {
     const { data } = await supabase
       .from('forms')
       .select('*')
-      .eq('slug', EXAMPLE_FORM_SLUG)
       .eq('status', 'published')
       .maybeSingle()
 
@@ -35,7 +33,7 @@ async function getExampleForm(): Promise<Form> {
 }
 
 export default async function HomePage() {
-  const form = await getExampleForm()
+  const form = await getForm()
 
   return <FormPlayer form={form} />
 }

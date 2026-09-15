@@ -110,7 +110,8 @@ export interface Database {
       forms: {
         Row: {
           id: string
-          user_id: string | null
+          is_singleton?: boolean
+          user_id?: string | null
           title: string
           description: string | null
           slug: string
@@ -123,6 +124,7 @@ export interface Database {
         }
         Insert: {
           id?: string
+          is_singleton?: boolean
           user_id?: string | null
           title: string
           description?: string | null
@@ -135,6 +137,8 @@ export interface Database {
           updated_at?: string
         }
         Update: {
+          id?: string
+          is_singleton?: boolean
           user_id?: string | null
           title?: string
           description?: string | null
@@ -155,7 +159,7 @@ export interface Database {
         }
         Insert: {
           id?: string
-          form_id: string
+          form_id?: string
           answers: Record<string, Json>
           submitted_at?: string
         }
