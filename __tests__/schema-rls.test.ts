@@ -49,4 +49,23 @@ describe('Supabase Schema and RLS Security Policies', () => {
     expect(schemaSql).toContain('CREATE INDEX idx_responses_submitted_at')
     expect(schemaSql).toContain('CREATE INDEX idx_responses_respondent_hash')
   })
+
+  it('should enforce security_invoker on analytical views and revoke anon/public privileges to prevent RLS bypass', () => {
+    const normalizedSchemaPath = path.resolve(__dirname, '../supabase/normalized-schema.sql')
+    const normalizedSchemaSql = fs.readFileSync(normalizedSchemaPath, 'utf8')
+
+    for (const sql of [schemaSql, normalizedSchemaSql]) {
+      // Views must be created WITH (security_invoker = true)
+      expect(sql).toMatch(/CREATE OR REPLACE VIEW v_response_answers_normalized\s+WITH\s*\(\s*security_invoker\s*=\s*true\s*\)\s+AS/i)
+      expect(sql).toMatch(/CREATE OR REPLACE VIEW v_question_metrics\s+WITH\s*\(\s*security_invoker\s*=\s*true\s*\)\s+AS/i)
+
+      // Anonymous and public access must be revoked
+      expect(sql).toContain('REVOKE ALL ON v_response_answers_normalized FROM anon, public;')
+      expect(sql).toContain('REVOKE ALL ON v_question_metrics FROM anon, public;')
+
+      // Access granted to authenticated users
+      expect(sql).toContain('GRANT SELECT ON v_response_answers_normalized TO authenticated;')
+      expect(sql).toContain('GRANT SELECT ON v_question_metrics TO authenticated;')
+    }
+  })
 })

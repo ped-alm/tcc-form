@@ -299,7 +299,8 @@ CREATE TRIGGER sync_form_questions_trigger
 -- 5. Analytical Views for Direct SQL Queries
 
 -- View: Flattens responses and joins them to normalized question definitions
-CREATE OR REPLACE VIEW v_response_answers_normalized AS
+CREATE OR REPLACE VIEW v_response_answers_normalized
+WITH (security_invoker = true) AS
 SELECT
   r.id AS response_id,
   r.form_id,
@@ -315,7 +316,8 @@ FROM responses r
 JOIN questions q ON q.form_id = r.form_id;
 
 -- View: Computes response rates, counts, and numeric averages per question
-CREATE OR REPLACE VIEW v_question_metrics AS
+CREATE OR REPLACE VIEW v_question_metrics
+WITH (security_invoker = true) AS
 SELECT
   q.form_id,
   q.id AS question_id,
@@ -336,3 +338,9 @@ SELECT
 FROM questions q
 LEFT JOIN responses r ON r.form_id = q.form_id
 GROUP BY q.form_id, q.id, q.question_key, q.type, q.title;
+
+-- Permissions: Restrict analytical views to authenticated users and revoke public/anon access
+REVOKE ALL ON v_response_answers_normalized FROM anon, public;
+REVOKE ALL ON v_question_metrics FROM anon, public;
+GRANT SELECT ON v_response_answers_normalized TO authenticated;
+GRANT SELECT ON v_question_metrics TO authenticated;
