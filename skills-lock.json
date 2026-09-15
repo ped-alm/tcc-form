@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "engineering-manager": {
+      "source": "darasoba/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering-manager/SKILL.md",
+      "computedHash": "899a5156cdfd25b45a75f03970e1115594ede09ddb2857ab1e6bade5d4d0098a"
+    },
     "supabase": {
       "source": "supabase/agent-skills",
       "sourceType": "github",
@@ -12,6 +18,12 @@
       "sourceType": "github",
       "skillPath": "skills/supabase-postgres-best-practices/SKILL.md",
       "computedHash": "e14e276241805c97dbcfe40dcbea1a3035269cc7293cac4b1832dda41a835e60"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-best-practices/SKILL.md",
+      "computedHash": "3219a1944e404ffc14d1d9d6aef6dd2e3855b81387ee0a044ccbfe14d34c2357"
     }
   }
 }
