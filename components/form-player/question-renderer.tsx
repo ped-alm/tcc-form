@@ -22,15 +22,21 @@ interface FileUploadQuestionProps {
   value: FileUploadValue | null
   onChange: (value: FileUploadValue | null) => void
   theme: ThemeConfig
+  language?: 'pt' | 'en'
 }
 
-function FileUploadQuestion({ question, value, onChange, theme }: FileUploadQuestionProps) {
+function FileUploadQuestion({ question, value, onChange, theme, language = 'pt' }: FileUploadQuestionProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const isEnglish = language === 'en'
 
   const handleFileSelect = useCallback(() => {
-    setUploadError('File upload is currently unavailable')
-  }, [])
+    setUploadError(
+      isEnglish 
+        ? 'File upload is currently unavailable' 
+        : 'O upload de arquivos está temporariamente indisponível'
+    )
+  }, [isEnglish])
 
   return (
     <div>
@@ -97,9 +103,13 @@ function FileUploadQuestion({ question, value, onChange, theme }: FileUploadQues
           >
             <Upload className="w-8 h-8 opacity-50" />
             <div className="text-center">
-              <p className="font-medium">Click to upload</p>
+              <p className="font-medium">
+                {isEnglish ? 'Click to upload' : 'Clique para enviar'}
+              </p>
               <p className="text-sm opacity-50 mt-1">
-                Images & PDFs up to {question.maxFileSize || 10}MB
+                {isEnglish
+                  ? `Images & PDFs up to ${question.maxFileSize || 10}MB`
+                  : `Imagens e PDFs de até ${question.maxFileSize || 10}MB`}
               </p>
             </div>
           </motion.button>
@@ -121,11 +131,13 @@ interface MatrixQuestionProps {
   onChange: (value: Json) => void
   theme: ThemeConfig
   onClearError?: () => void
+  language?: 'pt' | 'en'
 }
 
-function MatrixQuestion({ question, value, onChange, theme, onClearError }: MatrixQuestionProps) {
+function MatrixQuestion({ question, value, onChange, theme, onClearError, language = 'pt' }: MatrixQuestionProps) {
   const rows = question.matrixRows || []
   const columns = question.matrixColumns || []
+  const isEnglish = language === 'en'
   const currentAnswers = (typeof value === 'object' && value !== null && !Array.isArray(value))
     ? (value as Record<string, string>)
     : {}
@@ -138,6 +150,12 @@ function MatrixQuestion({ question, value, onChange, theme, onClearError }: Matr
 
   const answeredCount = rows.filter(r => Boolean(currentAnswers[r.id])).length
 
+  const headerTitle = isEnglish ? 'Topic evaluation' : 'Avaliação dos tópicos'
+  const progressLabel = isEnglish
+    ? `${answeredCount} of ${rows.length} completed`
+    : `${answeredCount} de ${rows.length} preenchidos`
+  const columnTopicHeader = isEnglish ? 'Topic' : 'Tópico'
+
   return (
     <div className="w-full space-y-4">
       {/* Progress indicator for matrix */}
@@ -145,7 +163,7 @@ function MatrixQuestion({ question, value, onChange, theme, onClearError }: Matr
         className="flex items-center justify-between text-xs sm:text-sm font-medium px-1"
         style={{ color: theme.textColor }}
       >
-        <span className="opacity-70">Avaliação dos tópicos</span>
+        <span className="opacity-70">{headerTitle}</span>
         <span 
           className="px-2.5 py-0.5 rounded-full text-xs font-semibold tabular-nums"
           style={{ 
@@ -153,7 +171,7 @@ function MatrixQuestion({ question, value, onChange, theme, onClearError }: Matr
             color: theme.primaryColor,
           }}
         >
-          {answeredCount} de {rows.length} preenchidos
+          {progressLabel}
         </span>
       </div>
 
@@ -169,7 +187,7 @@ function MatrixQuestion({ question, value, onChange, theme, onClearError }: Matr
           <thead>
             <tr className="border-b" style={{ borderColor: `${theme.textColor}15` }}>
               <th className="text-left py-3.5 px-4 font-semibold text-sm" style={{ color: theme.textColor }}>
-                Tópico
+                {columnTopicHeader}
               </th>
               {columns.map((col) => (
                 <th
@@ -507,14 +525,22 @@ export function QuestionRenderer({
           onChange={onChange}
           theme={theme}
           onClearError={onClearError}
+          language={language}
         />
       )
 
     case 'yes_no':
+      const yesNoOptions = isEnglish ? ['Yes', 'No'] : ['Sim', 'Não']
       return (
         <div className="flex gap-4">
-          {['Yes', 'No'].map((option) => {
-            const isSelected = value === option
+          {yesNoOptions.map((option) => {
+            const isSelected =
+              value === option ||
+              (option === 'Yes' && value === 'Sim') ||
+              (option === 'No' && value === 'Não') ||
+              (option === 'Sim' && value === 'Yes') ||
+              (option === 'Não' && value === 'No') ||
+              (typeof value === 'boolean' && ((option === 'Yes' || option === 'Sim') ? value === true : value === false))
             return (
               <motion.button
                 key={option}
@@ -629,6 +655,7 @@ export function QuestionRenderer({
           value={value as FileUploadValue | null}
           onChange={onChange}
           theme={theme}
+          language={language}
         />
       )
 

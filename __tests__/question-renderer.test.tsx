@@ -124,6 +124,163 @@ describe('QuestionRenderer Component', () => {
     expect(onChange).toHaveBeenCalledWith({ r_ci: 'c_adv' })
   })
 
+  it('renders matrix question with Portuguese localization by default or when language="pt"', () => {
+    const question: QuestionConfig = {
+      id: 'q_matrix_pt',
+      type: 'matrix',
+      title: 'Avaliação de Conhecimento',
+      matrixRows: [
+        { id: 'r1', label: 'Testes Unitários' },
+        { id: 'r2', label: 'Integração Contínua' },
+      ],
+      matrixColumns: [
+        { id: 'c1', label: 'Básico', shortLabel: '1' },
+      ],
+    }
+
+    render(
+      <QuestionRenderer
+        question={question}
+        value={{ r1: 'c1' }}
+        onChange={vi.fn()}
+        onSubmit={vi.fn()}
+        theme={theme}
+        language="pt"
+      />
+    )
+
+    expect(screen.getByText('Avaliação dos tópicos')).toBeInTheDocument()
+    expect(screen.getByText('1 de 2 preenchidos')).toBeInTheDocument()
+    expect(screen.getByText('Tópico')).toBeInTheDocument()
+  })
+
+  it('renders matrix question with English localization when language="en"', () => {
+    const question: QuestionConfig = {
+      id: 'q_matrix_en',
+      type: 'matrix',
+      title: 'Knowledge Evaluation',
+      matrixRows: [
+        { id: 'r1', label: 'Unit Testing' },
+        { id: 'r2', label: 'Continuous Integration' },
+      ],
+      matrixColumns: [
+        { id: 'c1', label: 'Basic', shortLabel: '1' },
+      ],
+    }
+
+    render(
+      <QuestionRenderer
+        question={question}
+        value={{ r1: 'c1' }}
+        onChange={vi.fn()}
+        onSubmit={vi.fn()}
+        theme={theme}
+        language="en"
+      />
+    )
+
+    expect(screen.getByText('Topic evaluation')).toBeInTheDocument()
+    expect(screen.getByText('1 of 2 completed')).toBeInTheDocument()
+    expect(screen.getByText('Topic')).toBeInTheDocument()
+  })
+
+  it('renders yes_no question with Portuguese options "Sim" and "Não"', () => {
+    const question: QuestionConfig = {
+      id: 'q_yn_pt',
+      type: 'yes_no',
+      title: 'Você concorda?',
+    }
+    const onChange = vi.fn()
+    const onSubmit = vi.fn()
+
+    render(
+      <QuestionRenderer
+        question={question}
+        value="Sim"
+        onChange={onChange}
+        onSubmit={onSubmit}
+        theme={theme}
+        language="pt"
+      />
+    )
+
+    const simButton = screen.getByRole('button', { name: /sim/i })
+    const naoButton = screen.getByRole('button', { name: /não/i })
+    expect(simButton).toBeInTheDocument()
+    expect(naoButton).toBeInTheDocument()
+
+    fireEvent.click(naoButton)
+    expect(onChange).toHaveBeenCalledWith('Não')
+    expect(onSubmit).toHaveBeenCalledWith(true)
+  })
+
+  it('renders yes_no question with English options "Yes" and "No"', () => {
+    const question: QuestionConfig = {
+      id: 'q_yn_en',
+      type: 'yes_no',
+      title: 'Do you agree?',
+    }
+    const onChange = vi.fn()
+    const onSubmit = vi.fn()
+
+    render(
+      <QuestionRenderer
+        question={question}
+        value="Yes"
+        onChange={onChange}
+        onSubmit={onSubmit}
+        theme={theme}
+        language="en"
+      />
+    )
+
+    const yesButton = screen.getByRole('button', { name: /yes/i })
+    const noButton = screen.getByRole('button', { name: /no/i })
+    expect(yesButton).toBeInTheDocument()
+    expect(noButton).toBeInTheDocument()
+
+    fireEvent.click(noButton)
+    expect(onChange).toHaveBeenCalledWith('No')
+    expect(onSubmit).toHaveBeenCalledWith(true)
+  })
+
+  it('renders file_upload question with localized strings', () => {
+    const question: QuestionConfig = {
+      id: 'q_upload',
+      type: 'file_upload',
+      title: 'Upload Document',
+      maxFileSize: 5,
+    }
+
+    const { rerender } = render(
+      <QuestionRenderer
+        question={question}
+        value={null}
+        onChange={vi.fn()}
+        onSubmit={vi.fn()}
+        theme={theme}
+        language="pt"
+      />
+    )
+
+    expect(screen.getByText('Clique para enviar')).toBeInTheDocument()
+    expect(screen.getByText('Imagens e PDFs de até 5MB')).toBeInTheDocument()
+
+    rerender(
+      <QuestionRenderer
+        question={question}
+        value={null}
+        onChange={vi.fn()}
+        onSubmit={vi.fn()}
+        theme={theme}
+        language="en"
+      />
+    )
+
+    expect(screen.getByText('Click to upload')).toBeInTheDocument()
+    expect(screen.getByText('Images & PDFs up to 5MB')).toBeInTheDocument()
+  })
+
   it('applies error styling when error prop is provided', () => {
     const question: QuestionConfig = {
       id: 'q_req',

@@ -2,7 +2,7 @@
 
 **Severity**: MEDIUM  
 **Category**: Maintainability & UI / UX  
-**Status**: Verified Issue  
+**Status**: Resolved
 **Files**: `components/form-player/question-renderer.tsx` (lines 148, 156, 172, 308-320, 502-511, 516), `lib/validation.ts` (lines 253-261)
 
 ---
