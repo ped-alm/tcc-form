@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Form, QuestionConfig, Json } from '@/lib/database.types'
 import { getTheme, getThemeCSSVariables } from '@/lib/themes'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -8,7 +8,6 @@ import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
 import { ChevronUp, ChevronDown, Check, ArrowRight, Globe } from 'lucide-react'
 import { QuestionRenderer } from './question-renderer'
-import { TurnstileWidget, TurnstileWidgetRef } from './turnstile-widget'
 import { toast } from 'sonner'
 import { submitResponseAction } from '@/app/actions/submit-response'
 import { generateRespondentFingerprint } from '@/lib/fingerprint'
@@ -24,8 +23,76 @@ interface FormPlayerProps {
   form: Form
 }
 
+function isInteractiveFormElement(element: EventTarget | Element | null): boolean {
+  if (!element || typeof (element as Element).closest !== 'function') return false
+
+  const el = element as Element
+  const tagName = el.tagName.toUpperCase()
+  if (tagName === 'INPUT') {
+    const inputType = (el as HTMLInputElement).type?.toLowerCase()
+    if (inputType === 'button' || inputType === 'submit' || inputType === 'reset') {
+      return false
+    }
+    return true
+  }
+
+  if (tagName === 'TEXTAREA' || tagName === 'SELECT') {
+    return true
+  }
+
+  if (
+    (el as HTMLElement).isContentEditable ||
+    el.getAttribute('contenteditable') === 'true' ||
+    el.getAttribute('contenteditable') === ''
+  ) {
+    return true
+  }
+
+  const role = el.getAttribute('role')
+  if (
+    role &&
+    [
+      'radiogroup',
+      'radio',
+      'checkbox',
+      'listbox',
+      'combobox',
+      'slider',
+      'spinbutton',
+      'menu',
+      'menuitem',
+      'menuitemcheckbox',
+      'menuitemradio',
+      'textbox',
+      'searchbox',
+      'grid',
+      'gridcell',
+      'tree',
+      'treeitem',
+      'option',
+    ].includes(role)
+  ) {
+    return true
+  }
+
+  if (
+    el.closest(
+      'input:not([type="button"]):not([type="submit"]):not([type="reset"]), textarea, select, [contenteditable="true"], [contenteditable=""], [role="radiogroup"], [role="radio"], [role="checkbox"], [role="listbox"], [role="combobox"], [role="menu"], [role="grid"], [role="tree"], [data-question-input]'
+    )
+  ) {
+    return true
+  }
+
+  return false
+}
+
 export function FormPlayer({ form }: FormPlayerProps) {
   const [language, setLanguage] = useState<SurveyLanguage>('pt')
+  const [answers, setAnswers] = useState<Record<string, Json>>({})
+  const answersRef = useRef(answers)
+  useEffect(() => {
+    answersRef.current = answers
+  }, [answers])
 
   const isSurveyForm =
     form.id === EXAMPLE_FORM_ID ||
@@ -40,7 +107,9 @@ export function FormPlayer({ form }: FormPlayerProps) {
 
   const handleLanguageChange = (newLang: SurveyLanguage) => {
     if (newLang === language) return
-    setAnswers(prev => convertAnswersLanguage(prev, language, newLang))
+    const updated = convertAnswersLanguage(answersRef.current, language, newLang)
+    answersRef.current = updated
+    setAnswers(updated)
     setLanguage(newLang)
     setErrors({})
   }
@@ -51,28 +120,13 @@ export function FormPlayer({ form }: FormPlayerProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [hasStarted, setHasStarted] = useState(false)
   const [terminationReason, setTerminationReason] = useState<'consent_declined' | 'not_eligible' | null>(null)
-  const [answers, setAnswers] = useState<Record<string, Json>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [direction, setDirection] = useState(0)
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
   
   const containerRef = useRef<HTMLDivElement>(null)
-  const turnstileRef = useRef<TurnstileWidgetRef>(null)
   const skipNextValidationRef = useRef(false)
-
-  const handleTurnstileToken = useCallback((token: string) => {
-    setTurnstileToken(token)
-  }, [])
-
-  const handleTurnstileError = useCallback(() => {
-    setTurnstileToken(null)
-  }, [])
-
-  const handleTurnstileExpire = useCallback(() => {
-    setTurnstileToken(null)
-  }, [])
 
   // Check if this respondent already submitted from this browser
   useEffect(() => {
@@ -91,10 +145,9 @@ export function FormPlayer({ form }: FormPlayerProps) {
   const isLastQuestion = currentIndex === questions.length - 1
   const isFirstQuestion = !hasStarted
   const progress = !hasStarted ? 0 : questions.length > 0 ? ((currentIndex + 1) / questions.length) * 100 : 0
-  const isTurnstileRequired = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY)
 
   const validateQuestionById = (question: QuestionConfig): boolean => {
-    const answer = answers[question.id]
+    const answer = answersRef.current[question.id]
     
     if (question.required) {
       if (question.type === 'matrix') {
@@ -221,12 +274,11 @@ export function FormPlayer({ form }: FormPlayerProps) {
       const result = await submitResponseAction({
         formId: form.id,
         answers: {
-          ...answers,
+          ...answersRef.current,
           _survey_language: language,
         },
         respondentHash,
         clientToken,
-        turnstileToken: turnstileToken || undefined,
       })
 
       if (result.success) {
@@ -239,8 +291,6 @@ export function FormPlayer({ form }: FormPlayerProps) {
         }
         setIsSubmitted(true)
       } else {
-        turnstileRef.current?.reset()
-        setTurnstileToken(null)
         if (result.validationErrors) {
           setErrors(prev => ({ ...prev, ...result.validationErrors }))
           const firstErrorId = Object.keys(result.validationErrors)[0]
@@ -255,8 +305,6 @@ export function FormPlayer({ form }: FormPlayerProps) {
         )
       }
     } catch {
-      turnstileRef.current?.reset()
-      setTurnstileToken(null)
       toast.error(
         language === 'en' ? 'Error submitting response' : 'Erro ao registrar resposta'
       )
@@ -278,13 +326,13 @@ export function FormPlayer({ form }: FormPlayerProps) {
     if (!shouldSkip && !validateCurrentQuestion()) return
 
     // Early termination routing for Q1 and Q2 (checks both Portuguese and English)
-    const q1Answer = answers['q01-consentimento']
+    const q1Answer = answersRef.current['q01-consentimento']
     if (currentQuestion?.id === 'q01-consentimento' && (q1Answer === 'Não concordo.' || q1Answer === 'I do not agree.')) {
       setTerminationReason('consent_declined')
       setIsSubmitted(true)
       return
     }
-    const q2Answer = answers['q02-atuacao-software']
+    const q2Answer = answersRef.current['q02-atuacao-software']
     if (currentQuestion?.id === 'q02-atuacao-software' && (q2Answer === 'Não.' || q2Answer === 'No.')) {
       setTerminationReason('not_eligible')
       setIsSubmitted(true)
@@ -292,14 +340,6 @@ export function FormPlayer({ form }: FormPlayerProps) {
     }
     
     if (isLastQuestion) {
-      if (isTurnstileRequired && !turnstileToken) {
-        toast.error(
-          language === 'en'
-            ? 'Please complete the security verification before submitting.'
-            : 'Por favor, complete a verificação de segurança antes de enviar.'
-        )
-        return
-      }
       handleSubmit()
     } else {
       setDirection(1)
@@ -326,12 +366,32 @@ export function FormPlayer({ form }: FormPlayerProps) {
   })
 
   const updateAnswer = (questionId: string, value: Json) => {
+    answersRef.current = { ...answersRef.current, [questionId]: value }
     setAnswers(prev => ({ ...prev, [questionId]: value }))
     // Clear error when user starts typing
     if (errors[questionId]) {
       const newErrors = { ...errors }
       delete newErrors[questionId]
       setErrors(newErrors)
+    }
+  }
+
+  const handleRestart = () => {
+    answersRef.current = {}
+    setIsSubmitted(false)
+    setTerminationReason(null)
+    setCurrentIndex(0)
+    setHasStarted(false)
+    setAnswers({})
+    setErrors({})
+    setDirection(0)
+    skipNextValidationRef.current = false
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.removeItem(`survey_submitted_${form.id}`)
+      } catch {
+        // Ignore storage errors
+      }
     }
   }
 
@@ -358,12 +418,17 @@ export function FormPlayer({ form }: FormPlayerProps) {
         goToNextRef.current()
       }
       
-      if (e.key === 'ArrowUp' || (e.key === 'Tab' && e.shiftKey)) {
+      const activeEl = typeof document !== 'undefined' ? document.activeElement : null
+      const isInputFocused = isInteractiveFormElement(e.target) || isInteractiveFormElement(activeEl)
+
+      if (e.key === 'ArrowUp') {
+        if (isInputFocused) return
         e.preventDefault()
         goToPreviousRef.current()
       }
       
       if (e.key === 'ArrowDown') {
+        if (isInputFocused) return
         e.preventDefault()
         goToNextRef.current()
       }
@@ -425,12 +490,7 @@ export function FormPlayer({ form }: FormPlayerProps) {
 
           <Button
             variant="outline"
-            onClick={() => {
-              setIsSubmitted(false)
-              setTerminationReason(null)
-              setCurrentIndex(0)
-              setHasStarted(false)
-            }}
+            onClick={handleRestart}
             className="rounded-xl border px-6 py-2.5 text-sm font-medium transition-all hover:scale-105"
             style={{
               borderColor: `${theme.textColor}30`,
@@ -756,6 +816,7 @@ export function FormPlayer({ form }: FormPlayerProps) {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.25 }}
                   className="mt-6"
+                  data-question-input
                 >
                   <QuestionRenderer
                     question={currentQuestion}
@@ -795,19 +856,6 @@ export function FormPlayer({ form }: FormPlayerProps) {
                   )}
                 </AnimatePresence>
 
-                {/* Cloudflare Turnstile bot verification */}
-                {isLastQuestion && (
-                  <TurnstileWidget
-                    ref={turnstileRef}
-                    onToken={handleTurnstileToken}
-                    onError={handleTurnstileError}
-                    onExpire={handleTurnstileExpire}
-                    theme={['lavender', 'minimal'].includes(form.theme || 'ocean') ? 'light' : 'dark'}
-                    language={language}
-                    className="mt-6 mb-2"
-                  />
-                )}
-
                 {/* Action buttons */}
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -817,7 +865,7 @@ export function FormPlayer({ form }: FormPlayerProps) {
                 >
                   <Button
                     onClick={() => goToNext()}
-                    disabled={isSubmitting || (isLastQuestion && isTurnstileRequired && !turnstileToken)}
+                    disabled={isSubmitting}
                     className="h-12 px-6 text-base font-medium rounded-xl transition-all hover:scale-[1.02]"
                     style={{ 
                       backgroundColor: theme.primaryColor,

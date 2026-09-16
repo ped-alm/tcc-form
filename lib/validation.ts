@@ -5,14 +5,36 @@ import {
   SurveyLanguage,
 } from '@/lib/example-form'
 
+export interface ValidateAnswersOptions {
+  language?: SurveyLanguage
+}
+
+export type ValidateAnswersLanguageOrOptions = SurveyLanguage | ValidateAnswersOptions
+
 /**
  * Validates survey answers using Zod and configuration rules.
  */
 export function validateAnswers(
   answers: Record<string, Json>,
   questions: QuestionConfig[],
-  language: SurveyLanguage
+  languageOrOptions?: ValidateAnswersLanguageOrOptions
 ): { isValid: boolean; errors: Record<string, string>; sanitized: Record<string, Json> } {
+  let language: SurveyLanguage = 'pt'
+  if (typeof languageOrOptions === 'string') {
+    language = languageOrOptions
+  } else if (
+    languageOrOptions &&
+    typeof languageOrOptions === 'object' &&
+    languageOrOptions.language
+  ) {
+    language = languageOrOptions.language
+  } else if (
+    answers?._survey_language === 'en' ||
+    answers?._survey_language === 'pt'
+  ) {
+    language = answers._survey_language
+  }
+
   const errors: Record<string, string> = {}
   const sanitized: Record<string, Json> = {}
 
@@ -33,10 +55,25 @@ export function validateAnswers(
       (typeof value === 'object' && Object.keys(value).length === 0)
 
     if (question.required && isMissing) {
-      errors[question.id] =
-        language === 'en'
-          ? 'This field is required'
-          : 'Este campo é obrigatório'
+      if (question.type === 'checkboxes') {
+        errors[question.id] =
+          surveyTranslations[language]?.selectAtLeastOneError ??
+          (language === 'en'
+            ? 'Please select at least one option'
+            : 'Selecione pelo menos uma opção')
+      } else if (question.type === 'matrix') {
+        errors[question.id] =
+          surveyTranslations[language]?.rateAllTopicsError ??
+          (language === 'en'
+            ? 'Please rate all topics before continuing'
+            : 'Por favor, avalie todos os tópicos antes de continuar')
+      } else {
+        errors[question.id] =
+          surveyTranslations[language]?.requiredFieldError ??
+          (language === 'en'
+            ? 'This field is required'
+            : 'Este campo é obrigatório')
+      }
       continue
     }
 
@@ -87,9 +124,10 @@ export function validateAnswers(
 
         if (question.maxSelect && selectedItems.length > question.maxSelect) {
           errors[question.id] =
-            language === 'en'
+            surveyTranslations[language]?.maxSelectError?.(question.maxSelect) ??
+            (language === 'en'
               ? `You can select up to ${question.maxSelect} options`
-              : `Você pode selecionar no máximo ${question.maxSelect} opções`
+              : `Você pode selecionar no máximo ${question.maxSelect} opções`)
           continue
         }
 
@@ -129,9 +167,10 @@ export function validateAnswers(
           const missingRows = question.matrixRows.some(row => !matrixData[row.id])
           if (missingRows) {
             errors[question.id] =
-              language === 'en'
+              surveyTranslations[language]?.rateAllTopicsError ??
+              (language === 'en'
                 ? 'Please rate all topics before continuing'
-                : 'Por favor, avalie todos os tópicos antes de continuar'
+                : 'Por favor, avalie todos os tópicos antes de continuar')
             continue
           }
         }
@@ -188,7 +227,8 @@ export function validateAnswers(
         const parseResult = emailSchema.safeParse(value)
         if (!parseResult.success) {
           errors[question.id] =
-            language === 'en' ? 'Please enter a valid email address' : 'Por favor, insira um e-mail válido'
+            surveyTranslations[language]?.validEmailError ??
+            (language === 'en' ? 'Please enter a valid email address' : 'Por favor, insira um e-mail válido')
           continue
         }
         sanitized[question.id] = parseResult.data
@@ -200,7 +240,8 @@ export function validateAnswers(
         const parseResult = urlSchema.safeParse(value)
         if (!parseResult.success) {
           errors[question.id] =
-            language === 'en' ? 'Please enter a valid URL' : 'Por favor, insira uma URL válida'
+            surveyTranslations[language]?.validUrlError ??
+            (language === 'en' ? 'Please enter a valid URL' : 'Por favor, insira uma URL válida')
           continue
         }
         sanitized[question.id] = parseResult.data
@@ -211,7 +252,8 @@ export function validateAnswers(
         const phoneRegex = /^[+]?[\d\s\-().]{5,30}$/
         if (typeof value !== 'string' || !phoneRegex.test(value)) {
           errors[question.id] =
-            language === 'en' ? 'Please enter a valid phone number' : 'Por favor, insira um telefone válido'
+            surveyTranslations[language]?.validPhoneError ??
+            (language === 'en' ? 'Please enter a valid phone number' : 'Por favor, insira um telefone válido')
           continue
         }
         sanitized[question.id] = value
@@ -277,3 +319,9 @@ export function validateAnswers(
     sanitized,
   }
 }
+
+/**
+ * Validates survey answers using Zod and configuration rules.
+ * Alias for validateAnswers for compatibility.
+ */
+export const validateSurveyAnswers = validateAnswers

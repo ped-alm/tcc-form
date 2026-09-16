@@ -37,8 +37,9 @@ export async function createClient() {
 
 /**
  * Creates an admin Supabase client with the service role key.
- * Used for secure server-side operations that bypass RLS (e.g. response insertion after validation).
- * Returns null if SUPABASE_SERVICE_ROLE_KEY is not defined.
+ * Used for secure server-side operations and pre-checks that bypass RLS (e.g. duplicate response pre-checks or response insertion after validation).
+ * Returns null if SUPABASE_SERVICE_ROLE_KEY is not defined. When null, server operations execute under the anonymous role,
+ * relying on database RLS policies and constraints (such as unique indexes and SECURITY DEFINER RPCs) for security and deduplication.
  */
 export function createAdminClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL

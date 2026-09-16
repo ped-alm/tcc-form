@@ -34,13 +34,16 @@ Set your Supabase credentials in `.env.local`:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-or-publishable-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key # Optional: For administrative server operations and pre-checks bypassing RLS
 ```
+
+> **Security & Row Level Security (RLS)**: Public anonymous respondents are permitted to `INSERT` responses to published forms, but `SELECT` on `responses` is strictly restricted to authenticated administrators to safeguard respondent privacy. Form submissions are processed securely via the `submit_survey_response` RPC function (`SECURITY DEFINER`) or direct fallback insert with database unique constraint deduplication (`idx_responses_unique_respondent`). Supplying `SUPABASE_SERVICE_ROLE_KEY` is optional for respondent submissions, but enables administrative server-side pre-checks and operations without RLS restrictions.
 
 ### 3. Create database objects
 
 In the Supabase Dashboard, open the **SQL Editor** and run:
 
-1. `supabase/schema.sql` - creates `forms` and `responses` tables, indexes, RPC deduplication function, and RLS policies.
+1. `supabase/schema.sql` - canonical database schema: creates `forms` and `responses` tables, normalized question tables (`questions`, `question_options`, `question_matrix_rows`, `question_matrix_columns`), sync triggers, analytical views, indexes, RPC deduplication function, and RLS policies.
 2. `supabase/seed-example-form.sql` - seeds the survey form.
 
 ### 4. Run the app
@@ -82,6 +85,6 @@ tcc-form/
 │   ├── example-form.ts      # Survey questions & translations
 │   └── themes.ts            # Theme presets and CSS variables
 └── supabase/
-    ├── schema.sql           # Database schema & RLS policies
+    ├── schema.sql           # Canonical database schema & RLS policies
     └── seed-example-form.sql# Form seed script
 ```

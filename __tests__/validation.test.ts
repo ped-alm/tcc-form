@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateAnswers } from '@/lib/validation'
+import { validateAnswers, validateSurveyAnswers } from '@/lib/validation'
 import { QuestionConfig } from '@/lib/database.types'
 
 describe('validateAnswers', () => {
@@ -254,6 +254,98 @@ describe('validateAnswers', () => {
       expect(validateAnswers({ q_yn: 'No' }, questions, 'en').isValid).toBe(true)
       expect(validateAnswers({ q_yn: true }, questions, 'en').isValid).toBe(true)
       expect(validateAnswers({ q_yn: 'Maybe' }, questions, 'en').isValid).toBe(false)
+    })
+  })
+
+  describe('localization options and validateSurveyAnswers', () => {
+    const questions: QuestionConfig[] = [
+      { id: 'q_req', type: 'short_text', title: 'Name', required: true },
+      { id: 'q_cb', type: 'checkboxes', title: 'Choices', required: true, options: ['A', 'B'], maxSelect: 1 },
+      {
+        id: 'q_mat',
+        type: 'matrix',
+        title: 'Matrix',
+        required: true,
+        matrixRows: [{ id: 'r1', label: 'Row 1' }],
+        matrixColumns: [{ id: 'c1', label: 'Col 1' }],
+      },
+      { id: 'q_mail', type: 'email', title: 'Email', required: false },
+      { id: 'q_link', type: 'url', title: 'Link', required: false },
+      { id: 'q_tel', type: 'phone', title: 'Phone', required: false },
+    ]
+
+    it('should return English validation error messages when called with { language: "en" }', () => {
+      const result = validateSurveyAnswers(
+        {
+          q_cb: ['A', 'B'], // exceeds maxSelect
+          q_mail: 'not-an-email',
+          q_link: 'not-a-url',
+          q_tel: 'invalid',
+        },
+        questions,
+        { language: 'en' }
+      )
+
+      expect(result.isValid).toBe(false)
+      expect(result.errors['q_req']).toBe('This field is required')
+      expect(result.errors['q_mat']).toBe('Please rate all topics before continuing')
+      expect(result.errors['q_cb']).toBe('You can select up to 1 options')
+      expect(result.errors['q_mail']).toBe('Please enter a valid email address')
+      expect(result.errors['q_link']).toBe('Please enter a valid URL')
+      expect(result.errors['q_tel']).toBe('Please enter a valid phone number')
+    })
+
+    it('should return Portuguese validation error messages when called with { language: "pt" }', () => {
+      const result = validateSurveyAnswers(
+        {
+          q_cb: ['A', 'B'], // exceeds maxSelect
+          q_mail: 'not-an-email',
+          q_link: 'not-a-url',
+          q_tel: 'invalid',
+        },
+        questions,
+        { language: 'pt' }
+      )
+
+      expect(result.isValid).toBe(false)
+      expect(result.errors['q_req']).toBe('Este campo é obrigatório')
+      expect(result.errors['q_mat']).toBe('Por favor, avalie todos os tópicos antes de continuar')
+      expect(result.errors['q_cb']).toBe('Você pode selecionar no máximo 1 opções')
+      expect(result.errors['q_mail']).toBe('Por favor, insira um e-mail válido')
+      expect(result.errors['q_link']).toBe('Por favor, insira uma URL válida')
+      expect(result.errors['q_tel']).toBe('Por favor, insira um telefone válido')
+    })
+
+    it('should return selectAtLeastOneError for empty/unanswered required checkboxes in English and Portuguese', () => {
+      const cbOnly: QuestionConfig[] = [
+        { id: 'q_cb', type: 'checkboxes', title: 'Choices', required: true, options: ['A', 'B'] },
+      ]
+
+      const enEmpty = validateAnswers({ q_cb: [] }, cbOnly, { language: 'en' })
+      expect(enEmpty.errors['q_cb']).toBe('Please select at least one option')
+
+      const ptEmpty = validateAnswers({ q_cb: [] }, cbOnly, { language: 'pt' })
+      expect(ptEmpty.errors['q_cb']).toBe('Selecione pelo menos uma opção')
+
+      const enMissing = validateAnswers({}, cbOnly, { language: 'en' })
+      expect(enMissing.errors['q_cb']).toBe('Please select at least one option')
+
+      const ptMissing = validateAnswers({}, cbOnly, { language: 'pt' })
+      expect(ptMissing.errors['q_cb']).toBe('Selecione pelo menos uma opção')
+    })
+
+    it('should fall back to _survey_language when options parameter is omitted or empty', () => {
+      const resultEn = validateAnswers(
+        { _survey_language: 'en' },
+        [{ id: 'q1', type: 'short_text', title: 'Q1', required: true }]
+      )
+      expect(resultEn.errors['q1']).toBe('This field is required')
+
+      const resultPt = validateAnswers(
+        { _survey_language: 'pt' },
+        [{ id: 'q1', type: 'short_text', title: 'Q1', required: true }]
+      )
+      expect(resultPt.errors['q1']).toBe('Este campo é obrigatório')
     })
   })
 })

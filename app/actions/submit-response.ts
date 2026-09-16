@@ -5,7 +5,6 @@ import { z } from 'zod'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { Form, QuestionConfig } from '@/lib/database.types'
 import { validateAnswers } from '@/lib/validation'
-import { verifyTurnstileToken } from '@/lib/turnstile'
 import {
   exampleForm,
   EXAMPLE_FORM_ID,
@@ -18,7 +17,6 @@ export const SubmitResponsePayloadSchema = z.object({
   answers: z.record(z.string(), z.any()),
   respondentHash: z.string().max(128).optional(),
   clientToken: z.string().max(128).optional(),
-  turnstileToken: z.string().max(2048).optional(),
 })
 
 export type SubmitResponsePayload = z.infer<typeof SubmitResponsePayloadSchema>
@@ -148,18 +146,6 @@ export async function submitResponseAction(
   // 3. Resolve Questions Configuration based on Language
   const language = (payload.answers._survey_language as SurveyLanguage) || 'pt'
 
-  // 4. Cloudflare Turnstile Bot Protection Verification
-  const turnstileResult = await verifyTurnstileToken(payload.turnstileToken, clientIp)
-  if (!turnstileResult.success) {
-    return {
-      success: false,
-      error:
-        language === 'en'
-          ? 'Security challenge verification failed. Please try again.'
-          : 'Falha na verificação de segurança. Por favor, tente novamente.',
-    }
-  }
-
   const isSurvey = Boolean(
     form.questions &&
       (form.questions as QuestionConfig[]).some(q => q.id === 'q01-consentimento')
@@ -169,8 +155,8 @@ export async function submitResponseAction(
     ? surveyTranslations[language]?.questions || exampleForm.questions
     : (form.questions as QuestionConfig[]) || []
 
-  // 5. Strict Server-Side Validation with Zod
-  const validation = validateAnswers(payload.answers, questions, language)
+  // 4. Strict Server-Side Validation with Zod
+  const validation = validateAnswers(payload.answers, questions, { language })
   if (!validation.isValid) {
     return {
       success: false,
@@ -194,153 +180,181 @@ export async function submitResponseAction(
   }
 
   // 6. Database Submission & Deduplication
-  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    try {
-      const client = await getSupabaseSubmitClient()
+  if (
+    !process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
+    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+  ) {
+    console.error(
+      'Database configuration error: NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is not defined.'
+    )
+    return {
+      success: false,
+      error:
+        language === 'en'
+          ? 'Database service is currently unavailable. Please contact the administrator.'
+          : 'O serviço de banco de dados está indisponível no momento. Por favor, entre em contato com o administrador.',
+    }
+  }
 
-      // Primary submission path: atomic check and insertion via secure RPC function (Option A)
-      // Runs with SECURITY DEFINER to allow deduplication checks under the anon key without exposing responses to public SELECT.
-      let rpcHandled = false
-      if ('rpc' in client && typeof (client as { rpc?: unknown }).rpc === 'function') {
-        const { data: rpcData, error: rpcError } = await client.rpc('submit_survey_response', {
-          p_form_id: payload.formId,
-          p_answers: validation.sanitized,
-          p_respondent_hash: payload.respondentHash || null,
-        })
+  try {
+    const client = await getSupabaseSubmitClient()
 
-        if (!rpcError && rpcData) {
-          rpcHandled = true
-          const resultData = rpcData as { success?: boolean; is_duplicate?: boolean; id?: string; error?: string }
+    // Primary submission path: atomic check and insertion via secure RPC function (Option A)
+    // Runs with SECURITY DEFINER to allow deduplication checks under the anon key without exposing responses to public SELECT.
+    let rpcHandled = false
+    if ('rpc' in client && typeof (client as { rpc?: unknown }).rpc === 'function') {
+      const { data: rpcData, error: rpcError } = await client.rpc('submit_survey_response', {
+        p_form_id: payload.formId,
+        p_answers: validation.sanitized,
+        p_respondent_hash: payload.respondentHash || null,
+      })
 
-          if (resultData.is_duplicate) {
-            try {
-              cookieStore.set(`survey_submitted_${payload.formId}`, '1', {
-                path: '/',
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                maxAge: 60 * 60 * 24 * 365, // 1 year
-                sameSite: 'lax',
-              })
-            } catch {
-              // Cookie setting might be ignored in non-standard request environments
-            }
+      if (!rpcError && rpcData) {
+        rpcHandled = true
+        const resultData = rpcData as { success?: boolean; is_duplicate?: boolean; id?: string; error?: string }
 
-            return {
-              success: true,
-              isDuplicate: true,
-            }
-          }
-
-          if (resultData.success === false) {
-            return {
-              success: false,
-              error:
-                resultData.error ||
-                (language === 'en'
-                  ? 'An error occurred while submitting your response. Please try again.'
-                  : 'Ocorreu um erro ao enviar sua resposta. Por favor, tente novamente.'),
-            }
-          }
-        } else if (
-          rpcError &&
-          rpcError.code !== '42883' &&
-          !rpcError.message?.includes('function') &&
-          !rpcError.message?.includes('does not exist')
-        ) {
-          // If RPC exists but threw an unexpected database error
-          console.error('Error invoking submit_survey_response RPC:', rpcError)
-          return {
-            success: false,
-            error:
-              language === 'en'
-                ? 'An error occurred while submitting your response. Please try again.'
-                : 'Ocorreu um erro ao enviar sua resposta. Por favor, tente novamente.',
-          }
-        }
-      }
-
-      // Fallback submission path: direct table operations (for mock/test environments or schemas without RPC)
-      if (!rpcHandled) {
-        if (payload.respondentHash) {
+        if (resultData.is_duplicate) {
           try {
-            const { data: existing } = await (client.from('responses') as ReturnType<typeof client.from>)
-              .select('id')
-              .eq('form_id', payload.formId)
-              .eq('respondent_hash', payload.respondentHash)
-              .maybeSingle()
+            cookieStore.set(`survey_submitted_${payload.formId}`, '1', {
+              path: '/',
+              httpOnly: true,
+              secure: process.env.NODE_ENV === 'production',
+              maxAge: 60 * 60 * 24 * 365, // 1 year
+              sameSite: 'lax',
+            })
+          } catch {
+            // Cookie setting might be ignored in non-standard request environments
+          }
 
-            if (existing) {
-              try {
-                cookieStore.set(`survey_submitted_${payload.formId}`, '1', {
-                  path: '/',
-                  httpOnly: true,
-                  secure: process.env.NODE_ENV === 'production',
-                  maxAge: 60 * 60 * 24 * 365,
-                  sameSite: 'lax',
-                })
-              } catch {}
-
-              return {
-                success: true,
-                isDuplicate: true,
-              }
-            }
-          } catch {}
+          return {
+            success: true,
+            isDuplicate: true,
+          }
         }
 
-        const insertData = {
-          form_id: payload.formId,
-          answers: validation.sanitized,
-          respondent_hash: payload.respondentHash || null,
+        if (resultData.success === false) {
+          return {
+            success: false,
+            error:
+              resultData.error ||
+              (language === 'en'
+                ? 'An error occurred while submitting your response. Please try again.'
+                : 'Ocorreu um erro ao enviar sua resposta. Por favor, tente novamente.'),
+          }
         }
+      } else if (
+        rpcError &&
+        rpcError.code !== '42883' &&
+        !rpcError.message?.includes('function') &&
+        !rpcError.message?.includes('does not exist')
+      ) {
+        // If RPC exists but threw an unexpected database error
+        console.error('Error invoking submit_survey_response RPC:', rpcError)
+        return {
+          success: false,
+          error:
+            language === 'en'
+              ? 'An error occurred while submitting your response. Please try again.'
+              : 'Ocorreu um erro ao enviar sua resposta. Por favor, tente novamente.',
+        }
+      }
+    }
 
-        const { error: insertError } = await (client.from('responses') as ReturnType<typeof client.from>)
-          .insert(insertData as never)
+    // Fallback submission path: direct table operations (for mock/test environments or schemas without RPC)
+    if (!rpcHandled) {
+      // 1. Explicit admin pre-check:
+      // If administrative privileges are available via createAdminClient() (SUPABASE_SERVICE_ROLE_KEY),
+      // an explicit pre-check query can be performed to detect duplicate submissions prior to inserting.
+      // Under the anonymous client role, pre-check SELECT is intentionally skipped because responses RLS
+      // policy strictly denies public SELECT to protect respondent privacy. Deduplication for anonymous users
+      // is handled directly and atomically by the unique index idx_responses_unique_respondent on INSERT.
+      const adminClient = createAdminClient()
+      if (adminClient && payload.respondentHash) {
+        try {
+          const { data: existing } = await (adminClient.from('responses') as ReturnType<typeof adminClient.from>)
+            .select('id')
+            .eq('form_id', payload.formId)
+            .eq('respondent_hash', payload.respondentHash)
+            .maybeSingle()
 
-        if (insertError) {
-          // Handle Postgres unique constraint violation (code 23505) under concurrent submissions
-          if (
-            insertError.code === '23505' ||
-            insertError.message?.includes('duplicate key value') ||
-            insertError.details?.includes('already exists')
-          ) {
+          if (existing) {
             try {
               cookieStore.set(`survey_submitted_${payload.formId}`, '1', {
                 path: '/',
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
-                maxAge: 60 * 60 * 24 * 365, // 1 year
+                maxAge: 60 * 60 * 24 * 365,
                 sameSite: 'lax',
               })
-            } catch {
-              // Cookie setting might be ignored in non-standard request environments
-            }
+            } catch {}
 
             return {
               success: true,
               isDuplicate: true,
             }
           }
+        } catch {}
+      }
 
-          console.error('Error inserting response to Supabase:', insertError)
+      // 2. Direct INSERT:
+      // Note: Direct insert operations must NOT chain `.select()` under the anonymous client,
+      // as PostgREST would require SELECT privileges on the returned representation, which
+      // the anon role does not have under the responses RLS policies.
+      const insertData = {
+        form_id: payload.formId,
+        answers: validation.sanitized,
+        respondent_hash: payload.respondentHash || null,
+      }
+
+      const { error: insertError } = await (client.from('responses') as ReturnType<typeof client.from>)
+        .insert(insertData as never)
+
+      if (insertError) {
+        // Handle Postgres unique constraint violation (code 23505) under concurrent submissions
+        // or when running under anonymous role without pre-check SELECT privileges.
+        if (
+          insertError.code === '23505' ||
+          insertError.message?.includes('duplicate key value') ||
+          insertError.details?.includes('already exists') ||
+          insertError.message?.includes('idx_responses_unique_respondent') ||
+          insertError.details?.includes('idx_responses_unique_respondent')
+        ) {
+          try {
+            cookieStore.set(`survey_submitted_${payload.formId}`, '1', {
+              path: '/',
+              httpOnly: true,
+              secure: process.env.NODE_ENV === 'production',
+              maxAge: 60 * 60 * 24 * 365, // 1 year
+              sameSite: 'lax',
+            })
+          } catch {
+            // Cookie setting might be ignored in non-standard request environments
+          }
+
           return {
-            success: false,
-            error:
-              language === 'en'
-                ? 'An error occurred while submitting your response. Please try again.'
-                : 'Ocorreu um erro ao enviar sua resposta. Por favor, tente novamente.',
+            success: true,
+            isDuplicate: true,
           }
         }
+
+        console.error('Error inserting response to Supabase:', insertError)
+        return {
+          success: false,
+          error:
+            language === 'en'
+              ? 'An error occurred while submitting your response. Please try again.'
+              : 'Ocorreu um erro ao enviar sua resposta. Por favor, tente novamente.',
+        }
       }
-    } catch (err) {
-      console.error('Database connection exception during submit:', err)
-      return {
-        success: false,
-        error:
-          language === 'en'
-            ? 'Database connection error. Please try again.'
-            : 'Erro de conexão com o banco de dados. Por favor, tente novamente.',
-      }
+    }
+  } catch (err) {
+    console.error('Database connection exception during submit:', err)
+    return {
+      success: false,
+      error:
+        language === 'en'
+          ? 'Database connection error. Please try again.'
+          : 'Erro de conexão com o banco de dados. Por favor, tente novamente.',
     }
   }
 

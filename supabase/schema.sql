@@ -52,6 +52,7 @@ ALTER TABLE responses ENABLE ROW LEVEL SECURITY;
 
 -- Forms policies:
 -- Anyone can view the published form to answer it
+DROP POLICY IF EXISTS "Anyone can view published forms" ON forms;
 CREATE POLICY "Anyone can view published forms"
   ON forms FOR SELECT
   TO anon, authenticated
@@ -68,7 +69,10 @@ CREATE POLICY "Admins can manage forms"
   WITH CHECK ((select auth.jwt()->'app_metadata'->>'role') = 'admin');
 
 -- Responses policies:
--- Anyone can submit responses to the published form
+-- 1. INSERT: Anyone (anon or authenticated) can submit responses to published forms.
+--    Direct inserts must NOT chain RETURNING / .select() under the anonymous role,
+--    as PostgREST requires SELECT permissions on returned representation rows.
+DROP POLICY IF EXISTS "Anyone can submit responses to published forms" ON responses;
 CREATE POLICY "Anyone can submit responses to published forms"
   ON responses FOR INSERT
   TO anon, authenticated
@@ -80,7 +84,12 @@ CREATE POLICY "Anyone can submit responses to published forms"
     )
   );
 
--- Only authenticated users with admin role in app_metadata can view responses
+-- 2. SELECT: Only authenticated users with admin role in app_metadata can view responses.
+--    Public anonymous SELECT is strictly denied by Row Level Security to protect respondent privacy.
+--    Deduplication for anonymous respondents is handled at the database level:
+--    - Primary path: via submit_survey_response RPC function (SECURITY DEFINER)
+--    - Fallback path: via unique index idx_responses_unique_respondent (handling error 23505 on INSERT)
+--      without requiring an anonymous SELECT query.
 DROP POLICY IF EXISTS "Authenticated users can view responses" ON responses;
 DROP POLICY IF EXISTS "Admins can view responses" ON responses;
 CREATE POLICY "Admins can view responses"
@@ -236,6 +245,8 @@ ALTER TABLE question_matrix_rows ENABLE ROW LEVEL SECURITY;
 ALTER TABLE question_matrix_columns ENABLE ROW LEVEL SECURITY;
 
 -- Questions RLS Policies:
+-- Anyone can view questions of published forms
+DROP POLICY IF EXISTS "Anyone can view questions of published forms" ON questions;
 CREATE POLICY "Anyone can view questions of published forms"
   ON questions FOR SELECT
   TO anon, authenticated
@@ -256,6 +267,7 @@ CREATE POLICY "Admins can manage questions"
   WITH CHECK ((select auth.jwt()->'app_metadata'->>'role') = 'admin');
 
 -- Question Options RLS Policies:
+DROP POLICY IF EXISTS "Anyone can view options of published forms" ON question_options;
 CREATE POLICY "Anyone can view options of published forms"
   ON question_options FOR SELECT
   TO anon, authenticated
@@ -277,6 +289,7 @@ CREATE POLICY "Admins can manage question options"
   WITH CHECK ((select auth.jwt()->'app_metadata'->>'role') = 'admin');
 
 -- Matrix Rows RLS Policies:
+DROP POLICY IF EXISTS "Anyone can view matrix rows of published forms" ON question_matrix_rows;
 CREATE POLICY "Anyone can view matrix rows of published forms"
   ON question_matrix_rows FOR SELECT
   TO anon, authenticated
@@ -298,6 +311,7 @@ CREATE POLICY "Admins can manage matrix rows"
   WITH CHECK ((select auth.jwt()->'app_metadata'->>'role') = 'admin');
 
 -- Matrix Columns RLS Policies:
+DROP POLICY IF EXISTS "Anyone can view matrix columns of published forms" ON question_matrix_columns;
 CREATE POLICY "Anyone can view matrix columns of published forms"
   ON question_matrix_columns FOR SELECT
   TO anon, authenticated

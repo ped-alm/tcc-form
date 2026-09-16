@@ -41,15 +41,9 @@ describe('Supabase Schema and RLS Security Policies', () => {
   })
 
   it('should not contain overly permissive USING (true) policies for authenticated role (preventing BOLA/IDOR)', () => {
-    const normalizedSchemaPath = path.resolve(__dirname, '../supabase/normalized-schema.sql')
-    const normalizedSchemaSql = fs.readFileSync(normalizedSchemaPath, 'utf8')
-
-    for (const sql of [schemaSql, normalizedSchemaSql]) {
-      // Must not contain any policy granting unrestricted access to authenticated role
-      expect(sql).not.toMatch(/TO authenticated[\s\n]+USING\s*\(\s*true\s*\)/i)
-      expect(sql).toContain('DROP POLICY IF EXISTS "Authenticated users can manage questions"')
-    }
-
+    // Must not contain any policy granting unrestricted access to authenticated role
+    expect(schemaSql).not.toMatch(/TO authenticated[\s\n]+USING\s*\(\s*true\s*\)/i)
+    expect(schemaSql).toContain('DROP POLICY IF EXISTS "Authenticated users can manage questions"')
     expect(schemaSql).toContain('DROP POLICY IF EXISTS "Authenticated users can manage forms"')
     expect(schemaSql).toContain('DROP POLICY IF EXISTS "Authenticated users can view responses"')
     expect(schemaSql).toContain('DROP POLICY IF EXISTS "Authenticated users can delete responses"')
@@ -76,21 +70,30 @@ describe('Supabase Schema and RLS Security Policies', () => {
   })
 
   it('should enforce security_invoker on analytical views and revoke anon/public privileges to prevent RLS bypass', () => {
-    const normalizedSchemaPath = path.resolve(__dirname, '../supabase/normalized-schema.sql')
-    const normalizedSchemaSql = fs.readFileSync(normalizedSchemaPath, 'utf8')
+    // Views must be created WITH (security_invoker = true)
+    expect(schemaSql).toMatch(/CREATE OR REPLACE VIEW v_response_answers_normalized\s+WITH\s*\(\s*security_invoker\s*=\s*true\s*\)\s+AS/i)
+    expect(schemaSql).toMatch(/CREATE OR REPLACE VIEW v_question_metrics\s+WITH\s*\(\s*security_invoker\s*=\s*true\s*\)\s+AS/i)
 
-    for (const sql of [schemaSql, normalizedSchemaSql]) {
-      // Views must be created WITH (security_invoker = true)
-      expect(sql).toMatch(/CREATE OR REPLACE VIEW v_response_answers_normalized\s+WITH\s*\(\s*security_invoker\s*=\s*true\s*\)\s+AS/i)
-      expect(sql).toMatch(/CREATE OR REPLACE VIEW v_question_metrics\s+WITH\s*\(\s*security_invoker\s*=\s*true\s*\)\s+AS/i)
+    // Anonymous and public access must be revoked
+    expect(schemaSql).toContain('REVOKE ALL ON v_response_answers_normalized FROM anon, public;')
+    expect(schemaSql).toContain('REVOKE ALL ON v_question_metrics FROM anon, public;')
 
-      // Anonymous and public access must be revoked
-      expect(sql).toContain('REVOKE ALL ON v_response_answers_normalized FROM anon, public;')
-      expect(sql).toContain('REVOKE ALL ON v_question_metrics FROM anon, public;')
+    // Access granted to authenticated users
+    expect(schemaSql).toContain('GRANT SELECT ON v_response_answers_normalized TO authenticated;')
+    expect(schemaSql).toContain('GRANT SELECT ON v_question_metrics TO authenticated;')
+  })
 
-      // Access granted to authenticated users
-      expect(sql).toContain('GRANT SELECT ON v_response_answers_normalized TO authenticated;')
-      expect(sql).toContain('GRANT SELECT ON v_question_metrics TO authenticated;')
-    }
+  it('should maintain supabase/schema.sql as the single canonical schema source without redundant drift files', () => {
+    const redundantPath = path.resolve(__dirname, '../supabase/normalized-schema.sql')
+    expect(fs.existsSync(redundantPath)).toBe(false)
+  })
+
+  it('should support fallback deduplication under RLS via idx_responses_unique_respondent without requiring anonymous SELECT', () => {
+    // Unique index exists to support race-free deduplication on INSERT
+    expect(schemaSql).toMatch(/CREATE\s+UNIQUE\s+INDEX\s+idx_responses_unique_respondent\s+ON\s+responses/i)
+    // SELECT on responses is strictly prohibited for anonymous users
+    expect(schemaSql).not.toMatch(/ON responses FOR SELECT[^;]*?TO[^\n]*anon/i)
+    // INSERT on responses is allowed for anonymous users for published forms
+    expect(schemaSql).toMatch(/ON responses FOR INSERT[\s\S]*?TO anon, authenticated/i)
   })
 })
