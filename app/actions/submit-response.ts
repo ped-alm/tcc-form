@@ -189,8 +189,8 @@ export async function submitResponseAction(
       // Primary submission path: atomic check and insertion via secure RPC function (Option A)
       // Runs with SECURITY DEFINER to allow deduplication checks under the anon key without exposing responses to public SELECT.
       let rpcHandled = false
-      if (typeof (client as any).rpc === 'function') {
-        const { data: rpcData, error: rpcError } = await (client as any).rpc('submit_survey_response', {
+      if ('rpc' in client && typeof (client as { rpc?: unknown }).rpc === 'function') {
+        const { data: rpcData, error: rpcError } = await client.rpc('submit_survey_response', {
           p_form_id: payload.formId,
           p_answers: validation.sanitized,
           p_respondent_hash: payload.respondentHash || null,

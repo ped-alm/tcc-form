@@ -64,7 +64,7 @@ export interface QuestionConfig {
   title: string
   description?: string
   displayNumber?: string | number
-  required: boolean
+  required?: boolean
   // Type-specific options
   options?: string[] // For dropdown and checkboxes
   maxSelect?: number // Maximum selectable options for checkboxes
@@ -82,36 +82,10 @@ export interface QuestionConfig {
 export interface Database {
   public: {
     Tables: {
-      profiles: {
-        Row: {
-          id: string
-          email: string
-          full_name: string | null
-          avatar_url: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id: string
-          email: string
-          full_name?: string | null
-          avatar_url?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          email?: string
-          full_name?: string | null
-          avatar_url?: string | null
-          updated_at?: string
-        }
-      }
       forms: {
         Row: {
           id: string
           is_singleton?: boolean
-          user_id?: string | null
           title: string
           description: string | null
           slug: string
@@ -125,8 +99,7 @@ export interface Database {
         Insert: {
           id?: string
           is_singleton?: boolean
-          user_id?: string | null
-          title: string
+          title?: string
           description?: string | null
           slug: string
           status?: FormStatus
@@ -139,7 +112,6 @@ export interface Database {
         Update: {
           id?: string
           is_singleton?: boolean
-          user_id?: string | null
           title?: string
           description?: string | null
           slug?: string
@@ -149,6 +121,7 @@ export interface Database {
           thank_you_message?: string
           updated_at?: string
         }
+        Relationships: []
       }
       responses: {
         Row: {
@@ -169,6 +142,7 @@ export interface Database {
           answers?: Record<string, Json>
           respondent_hash?: string | null
         }
+        Relationships: []
       }
       questions: {
         Row: {
@@ -224,6 +198,7 @@ export interface Database {
           exclusive_options?: string[] | null
           updated_at?: string
         }
+        Relationships: []
       }
       question_options: {
         Row: {
@@ -250,6 +225,7 @@ export interface Database {
           order_index?: number
           is_exclusive?: boolean
         }
+        Relationships: []
       }
       question_matrix_rows: {
         Row: {
@@ -276,6 +252,7 @@ export interface Database {
           description?: string | null
           order_index?: number
         }
+        Relationships: []
       }
       question_matrix_columns: {
         Row: {
@@ -302,7 +279,11 @@ export interface Database {
           short_label?: string | null
           order_index?: number
         }
+        Relationships: []
       }
+    }
+    Views: {
+      [_ in never]: never
     }
     Functions: {
       submit_survey_response: {
@@ -314,11 +295,16 @@ export interface Database {
         Returns: Json
       }
     }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
 }
 
 // Convenience types
-export type Profile = Database['public']['Tables']['profiles']['Row']
 export type Form = Database['public']['Tables']['forms']['Row']
 export type FormInsert = Database['public']['Tables']['forms']['Insert']
 export type FormUpdate = Database['public']['Tables']['forms']['Update']

@@ -101,24 +101,49 @@ describe('Normalized Database Schema and Utilities', () => {
 
       // Map bundle rows to database table Row format
       const dbQuestions: NormalizedQuestion[] = bundle.questions.map(q => ({
-        ...q,
         id: q.id,
+        form_id: q.form_id,
+        question_key: q.question_key,
         order_index: q.order_index ?? 0,
+        type: q.type,
+        title: q.title,
+        description: q.description ?? null,
+        display_number: q.display_number ?? null,
         required: q.required ?? false,
+        placeholder: q.placeholder ?? null,
+        min_value: q.min_value ?? null,
+        max_value: q.max_value ?? null,
+        max_select: q.max_select ?? null,
+        exclusive_options: q.exclusive_options ?? null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }))
 
-      const dbOptions: NormalizedQuestionOption[] = bundle.options.map(o => ({
-        ...o,
+      const dbOptions: NormalizedQuestionOption[] = bundle.options.map((o, idx) => ({
+        id: o.id ?? `opt_${idx}`,
+        question_id: o.question_id,
+        label: o.label,
+        value: o.value ?? null,
+        order_index: o.order_index ?? idx,
+        is_exclusive: o.is_exclusive ?? false,
       }))
 
-      const dbMatrixRows: NormalizedMatrixRow[] = bundle.matrixRows.map(r => ({
-        ...r,
+      const dbMatrixRows: NormalizedMatrixRow[] = bundle.matrixRows.map((r, idx) => ({
+        id: r.id ?? `row_${idx}`,
+        question_id: r.question_id,
+        row_key: r.row_key,
+        label: r.label,
+        description: r.description ?? null,
+        order_index: r.order_index ?? idx,
       }))
 
-      const dbMatrixCols: NormalizedMatrixColumn[] = bundle.matrixColumns.map(c => ({
-        ...c,
+      const dbMatrixCols: NormalizedMatrixColumn[] = bundle.matrixColumns.map((c, idx) => ({
+        id: c.id ?? `col_${idx}`,
+        question_id: c.question_id,
+        col_key: c.col_key,
+        label: c.label,
+        short_label: c.short_label ?? null,
+        order_index: c.order_index ?? idx,
       }))
 
       const reconstructed = reconstructQuestionConfigs({

@@ -14,6 +14,7 @@ vi.mock('framer-motion', async () => {
 describe('FormPlayer Component', () => {
   const mockForm: Form = {
     id: 'test-form-id',
+    is_singleton: true,
     title: 'Research Survey',
     description: 'A study on software development',
     slug: 'research-survey',

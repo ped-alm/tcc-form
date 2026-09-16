@@ -147,7 +147,7 @@ describe('TurnstileWidget Component', () => {
 
     // Now trigger Turnstile callback
     act(() => {
-      capturedOptions.callback('token-abc')
+      capturedOptions.callback?.('token-abc')
     })
 
     // Callback should have captured the updated state ('second:token-abc')
@@ -168,12 +168,12 @@ describe('TurnstileWidget Component', () => {
     )
 
     act(() => {
-      capturedOptions['error-callback']('timeout')
+      capturedOptions['error-callback']?.('timeout')
     })
     expect(onError).toHaveBeenCalledWith('timeout')
 
     act(() => {
-      capturedOptions['expired-callback']()
+      capturedOptions['expired-callback']?.()
     })
     expect(onExpire).toHaveBeenCalledTimes(1)
   })

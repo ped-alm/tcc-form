@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { submitResponseAction } from '@/app/actions/submit-response'
 import { EXAMPLE_FORM_ID } from '@/lib/example-form'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
@@ -118,7 +118,7 @@ describe('submitResponseAction', () => {
 
     const testFormId = '00000000-0000-4000-8000-000000000099'
     const testRespondentHash = 'hash-concurrent-test-12345'
-    const insertedResponses: Array<{ form_id: string; respondent_hash: string | null; answers: any }> = []
+    const insertedResponses: Array<{ form_id: string; respondent_hash: string | null; answers: unknown }> = []
 
     const mockClient = {
       from: vi.fn((table: string) => {
@@ -158,7 +158,7 @@ describe('submitResponseAction', () => {
                 })),
               })),
             })),
-            insert: vi.fn(async (data: any) => {
+            insert: vi.fn(async (data: { form_id: string; respondent_hash: string | null; answers: unknown }) => {
               // Simulate PostgreSQL unique constraint: CREATE UNIQUE INDEX idx_responses_unique_respondent
               // ON responses(form_id, respondent_hash) WHERE respondent_hash IS NOT NULL;
               const hasConflict =
@@ -188,8 +188,8 @@ describe('submitResponseAction', () => {
       }),
     }
 
-    vi.mocked(createAdminClient).mockReturnValue(mockClient as any)
-    vi.mocked(createClient).mockResolvedValue(mockClient as any)
+    vi.mocked(createAdminClient).mockReturnValue(mockClient as unknown as ReturnType<typeof createAdminClient>)
+    vi.mocked(createClient).mockResolvedValue(mockClient as unknown as Awaited<ReturnType<typeof createClient>>)
 
     try {
       const [res1, res2] = await Promise.all([
@@ -251,36 +251,41 @@ describe('submitResponseAction', () => {
 
     const testFormId = '00000000-0000-4000-8000-000000000088'
     const testRespondentHash = 'anon-rpc-test-hash-456'
-    const dbStoredResponses: Array<{ form_id: string; respondent_hash: string | null; answers: any }> = []
+    const dbStoredResponses: Array<{ form_id: string; respondent_hash: string | null; answers: unknown }> = []
 
-    const rpcMock = vi.fn(async (fnName: string, args: any) => {
-      expect(fnName).toBe('submit_survey_response')
-      expect(args.p_form_id).toBe(testFormId)
-      expect(args.p_respondent_hash).toBe(testRespondentHash)
+    const rpcMock = vi.fn(
+      async (
+        fnName: string,
+        args: { p_form_id: string; p_answers: unknown; p_respondent_hash: string | null }
+      ) => {
+        expect(fnName).toBe('submit_survey_response')
+        expect(args.p_form_id).toBe(testFormId)
+        expect(args.p_respondent_hash).toBe(testRespondentHash)
 
-      // Simulate PostgreSQL SECURITY DEFINER function logic
-      const isExisting = dbStoredResponses.some(
-        (r) => r.form_id === args.p_form_id && r.respondent_hash === args.p_respondent_hash
-      )
+        // Simulate PostgreSQL SECURITY DEFINER function logic
+        const isExisting = dbStoredResponses.some(
+          (r) => r.form_id === args.p_form_id && r.respondent_hash === args.p_respondent_hash
+        )
 
-      if (isExisting) {
+        if (isExisting) {
+          return {
+            data: { success: true, is_duplicate: true },
+            error: null,
+          }
+        }
+
+        dbStoredResponses.push({
+          form_id: args.p_form_id,
+          respondent_hash: args.p_respondent_hash,
+          answers: args.p_answers,
+        })
+
         return {
-          data: { success: true, is_duplicate: true },
+          data: { success: true, is_duplicate: false, id: 'resp-uuid-123' },
           error: null,
         }
       }
-
-      dbStoredResponses.push({
-        form_id: args.p_form_id,
-        respondent_hash: args.p_respondent_hash,
-        answers: args.p_answers,
-      })
-
-      return {
-        data: { success: true, is_duplicate: false, id: 'resp-uuid-123' },
-        error: null,
-      }
-    })
+    )
 
     const mockAnonClient = {
       from: vi.fn((table: string) => {
@@ -306,8 +311,8 @@ describe('submitResponseAction', () => {
     }
 
     // createAdminClient returns null when SUPABASE_SERVICE_ROLE_KEY is absent
-    vi.mocked(createAdminClient).mockReturnValue(null as any)
-    vi.mocked(createClient).mockResolvedValue(mockAnonClient as any)
+    vi.mocked(createAdminClient).mockReturnValue(null)
+    vi.mocked(createClient).mockResolvedValue(mockAnonClient as unknown as Awaited<ReturnType<typeof createClient>>)
 
     try {
       // 1. First submission by anonymous user

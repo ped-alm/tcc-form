@@ -609,7 +609,6 @@ export function convertAnswersLanguage(
 export const exampleForm: Form = {
   id: EXAMPLE_FORM_ID,
   is_singleton: true,
-  user_id: null,
   title: 'Práticas de engenharia de software no desenvolvimento de jogos',
   description: 'Pesquisa de TCC da PUC Minas  |  Tempo estimado de resposta de até 7 minutos\n\nEsta pesquisa busca compreender o que profissionais de jogos conhecem e utilizam em engenharia de software. A participação é voluntária. O formulário não solicita nome, e-mail, empresa ou jogo. Os resultados serão apresentados em conjunto e utilizados para fins acadêmicos.\n\nResponsável: Pedro Henrique de Almeida Costa. Contato: pedro.costa.1217022@sga.pucminas.br.',
   slug: EXAMPLE_FORM_SLUG,
