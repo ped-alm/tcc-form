@@ -1,8 +1,9 @@
 'use server'
 
 import { cookies, headers } from 'next/headers'
+import { z } from 'zod'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
-import { Form, QuestionConfig, Json } from '@/lib/database.types'
+import { Form, QuestionConfig } from '@/lib/database.types'
 import { validateAnswers } from '@/lib/validation'
 import { verifyTurnstileToken } from '@/lib/turnstile'
 import {
@@ -12,13 +13,15 @@ import {
   SurveyLanguage,
 } from '@/lib/example-form'
 
-export interface SubmitResponsePayload {
-  formId: string
-  answers: Record<string, Json>
-  respondentHash?: string
-  clientToken?: string
-  turnstileToken?: string
-}
+export const SubmitResponsePayloadSchema = z.object({
+  formId: z.string().uuid(),
+  answers: z.record(z.string(), z.any()),
+  respondentHash: z.string().max(128).optional(),
+  clientToken: z.string().max(128).optional(),
+  turnstileToken: z.string().max(2048).optional(),
+})
+
+export type SubmitResponsePayload = z.infer<typeof SubmitResponsePayloadSchema>
 
 export interface SubmitResponseResult {
   success: boolean
@@ -98,8 +101,17 @@ async function getFormDefinition(formId: string): Promise<Form | null> {
  * Server Action to validate and securely record anonymous form submissions.
  */
 export async function submitResponseAction(
-  payload: SubmitResponsePayload
+  rawPayload: unknown
 ): Promise<SubmitResponseResult> {
+  const parseResult = SubmitResponsePayloadSchema.safeParse(rawPayload)
+  if (!parseResult.success) {
+    return {
+      success: false,
+      error: 'Invalid request payload format.',
+    }
+  }
+  const payload = parseResult.data
+
   const reqHeaders = await headers()
   const cookieStore = await cookies()
 

@@ -48,9 +48,32 @@ describe('submitResponseAction', () => {
     expect(result.validationErrors?.['q01-consentimento']).toBeDefined()
   })
 
+  it('should reject malformed or non-object payloads with payload format error', async () => {
+    const testCases: unknown[] = [
+      null,
+      undefined,
+      {},
+      { answers: null },
+      { formId: 'invalid-non-uuid', answers: {} },
+      { formId: EXAMPLE_FORM_ID },
+      { formId: EXAMPLE_FORM_ID, answers: 'not-an-object' },
+      {
+        formId: EXAMPLE_FORM_ID,
+        answers: {},
+        clientToken: 'a'.repeat(129),
+      },
+    ]
+
+    for (const testPayload of testCases) {
+      const res = await submitResponseAction(testPayload)
+      expect(res.success).toBe(false)
+      expect(res.error).toBe('Invalid request payload format.')
+    }
+  })
+
   it('should reject submission when form is unknown or unpublished', async () => {
     const result = await submitResponseAction({
-      formId: 'non-existent-form-id',
+      formId: '00000000-0000-4000-8000-000000000000',
       answers: {},
       clientToken: '00000000-0000-4000-8000-000000000002',
     })
@@ -68,7 +91,7 @@ describe('submitResponseAction', () => {
     try {
       for (let i = 0; i < 15; i++) {
         const res = await submitResponseAction({
-          formId: 'invalid-id',
+          formId: '00000000-0000-4000-8000-000000000099',
           answers: {},
           clientToken: spamToken,
         })
