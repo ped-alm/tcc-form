@@ -35,7 +35,7 @@ export const themes: Record<ThemePreset, ThemeConfig> = {
     backgroundColor: '#022C22',
     textColor: '#ECFDF5',
     accentColor: '#34D399',
-    fontFamily: "'Space Grotesk', sans-serif",
+    fontFamily: 'var(--font-space-grotesk), sans-serif',
   },
   lavender: {
     id: 'lavender',

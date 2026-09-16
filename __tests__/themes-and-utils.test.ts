@@ -11,7 +11,12 @@ describe('themes', () => {
       expect(themes[t as keyof typeof themes]).toBeDefined()
       expect(themes[t as keyof typeof themes].primaryColor).toMatch(/^#[0-9A-Fa-f]{6}$/)
       expect(themes[t as keyof typeof themes].backgroundColor).toMatch(/^#[0-9A-Fa-f]{6}$/)
+      expect(themes[t as keyof typeof themes].fontFamily).toBeDefined()
     })
+  })
+
+  it('should configure Space Grotesk font variable for forest theme', () => {
+    expect(themes.forest.fontFamily).toBe('var(--font-space-grotesk), sans-serif')
   })
 
   it('should return the requested theme or fallback to ocean', () => {
@@ -28,7 +33,7 @@ describe('themes', () => {
       '--theme-background': '#022C22',
       '--theme-text': '#ECFDF5',
       '--theme-accent': '#34D399',
-      '--theme-font': "'Space Grotesk', sans-serif",
+      '--theme-font': 'var(--font-space-grotesk), sans-serif',
     })
   })
 })
