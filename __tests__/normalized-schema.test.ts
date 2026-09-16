@@ -81,7 +81,9 @@ describe('Normalized Database Schema and Utilities', () => {
       const matrixQ = exampleForm.questions.find(q => q.type === 'matrix')
       expect(matrixQ).toBeDefined()
       if (matrixQ) {
-        const rowsForQ = bundle.matrixRows.filter(r => r.question_id === matrixQ.id)
+        const normMatrixQ = bundle.questions.find(q => q.question_key === matrixQ.id)
+        expect(normMatrixQ).toBeDefined()
+        const rowsForQ = bundle.matrixRows.filter(r => r.question_id === normMatrixQ?.id)
         expect(rowsForQ.length).toBe(matrixQ.matrixRows?.length)
       }
 
@@ -89,11 +91,48 @@ describe('Normalized Database Schema and Utilities', () => {
       const checkboxQ = exampleForm.questions.find(q => q.exclusiveOptions && q.exclusiveOptions.length > 0)
       expect(checkboxQ).toBeDefined()
       if (checkboxQ) {
+        const normCheckboxQ = bundle.questions.find(q => q.question_key === checkboxQ.id)
+        expect(normCheckboxQ).toBeDefined()
         const exclusiveOpts = bundle.options.filter(
-          o => o.question_id === checkboxQ.id && o.is_exclusive
+          o => o.question_id === normCheckboxQ?.id && o.is_exclusive
         )
         expect(exclusiveOpts.length).toBe(checkboxQ.exclusiveOptions?.length)
       }
+    })
+
+    it('generates valid UUID v4 primary keys and foreign keys matching relational schema requirements', () => {
+      const bundle = normalizeQuestionConfigs(exampleForm.id, exampleForm.questions)
+      const uuidV4Regex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+      const questionIds = new Set(bundle.questions.map(q => q.id))
+
+      expect(bundle.questions.length).toBeGreaterThan(0)
+      bundle.questions.forEach(q => {
+        expect(q.id).toMatch(uuidV4Regex)
+        expect(q.form_id).toBe(exampleForm.id)
+        expect(q.question_key).toBeTruthy()
+      })
+
+      expect(bundle.options.length).toBeGreaterThan(0)
+      bundle.options.forEach(opt => {
+        expect(opt.id).toMatch(uuidV4Regex)
+        expect(opt.question_id).toMatch(uuidV4Regex)
+        expect(questionIds.has(opt.question_id)).toBe(true)
+      })
+
+      expect(bundle.matrixRows.length).toBeGreaterThan(0)
+      bundle.matrixRows.forEach(row => {
+        expect(row.id).toMatch(uuidV4Regex)
+        expect(row.question_id).toMatch(uuidV4Regex)
+        expect(questionIds.has(row.question_id)).toBe(true)
+      })
+
+      expect(bundle.matrixColumns.length).toBeGreaterThan(0)
+      bundle.matrixColumns.forEach(col => {
+        expect(col.id).toMatch(uuidV4Regex)
+        expect(col.question_id).toMatch(uuidV4Regex)
+        expect(questionIds.has(col.question_id)).toBe(true)
+      })
     })
 
     it('performs accurate round-trip reconstruction from relational rows back to QuestionConfig', () => {

@@ -17,7 +17,7 @@ This directory contains individual task issue files generated from the comprehen
 | 09 | **MEDIUM** | [Complete Bilingual Localization in Question Renderer UI](./09-medium-i18n-hardcoded-strings-matrix-yes-no.md) | `components/form-player/question-renderer.tsx` | UI / Maintainability | Resolved |
 | 10 | **LOW** | [Import Missing Space Grotesk Font for Forest Theme](./10-low-layout-missing-space-grotesk-font.md) | `app/layout.tsx`, `lib/themes.ts` | Next.js & UI Architecture | Resolved |
 | 11 | **LOW** | [Modernize React 19 Ref Handling in Turnstile Widget](./11-low-react-legacy-forwardref-turnstile.md) | `components/form-player/turnstile-widget.tsx` | React 19 Best Practices | Resolved |
-| 12 | **LOW** | [Align Normalization Utility Primary Keys with Database UUID Type](./12-low-database-normalization-uuid-mismatch.md) | `lib/normalized-questions.ts`, `schema.sql` | Database & TypeScript | Verified Issue |
+| 12 | **LOW** | [Align Normalization Utility Primary Keys with Database UUID Type](./12-low-database-normalization-uuid-mismatch.md) | `lib/normalized-questions.ts`, `schema.sql` | Database & TypeScript | Resolved |
 | 13 | **LOW** | [Evaluate Distributed Rate Limiting for Multi-Instance Serverless Deployment](./13-low-speculative-serverless-in-memory-rate-limiting.md) | `app/actions/submit-response.ts` | Architecture & Scalability | Speculative Improvement |
 
 ---

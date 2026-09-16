@@ -1,3 +1,4 @@
+import { v4 as uuidv4 } from 'uuid'
 import {
   QuestionConfig,
   QuestionType,
@@ -51,12 +52,12 @@ export function normalizeQuestionConfigs(
   const matrixColumns: NormalizedFormBundle['matrixColumns'] = []
 
   configs.forEach((config, qIdx) => {
-    const questionId = config.id || `q_${qIdx + 1}`
+    const questionId = uuidv4()
 
     questions.push({
       id: questionId,
       form_id: formId,
-      question_key: config.id,
+      question_key: config.id || `q_${qIdx + 1}`,
       order_index: qIdx + 1,
       type: config.type,
       title: config.title,
@@ -73,7 +74,7 @@ export function normalizeQuestionConfigs(
     if (config.options && Array.isArray(config.options)) {
       config.options.forEach((opt, optIdx) => {
         options.push({
-          id: `${questionId}_opt_${optIdx + 1}`,
+          id: uuidv4(),
           question_id: questionId,
           label: opt,
           value: opt,
@@ -86,9 +87,9 @@ export function normalizeQuestionConfigs(
     if (config.matrixRows && Array.isArray(config.matrixRows)) {
       config.matrixRows.forEach((row, rowIdx) => {
         matrixRows.push({
-          id: `${questionId}_row_${row.id || rowIdx + 1}`,
+          id: uuidv4(),
           question_id: questionId,
-          row_key: row.id,
+          row_key: row.id || `row_${rowIdx + 1}`,
           label: row.label,
           description: row.description || null,
           order_index: rowIdx + 1,
@@ -99,9 +100,9 @@ export function normalizeQuestionConfigs(
     if (config.matrixColumns && Array.isArray(config.matrixColumns)) {
       config.matrixColumns.forEach((col, colIdx) => {
         matrixColumns.push({
-          id: `${questionId}_col_${col.id || colIdx + 1}`,
+          id: uuidv4(),
           question_id: questionId,
-          col_key: col.id,
+          col_key: col.id || `col_${colIdx + 1}`,
           label: col.label,
           short_label: col.shortLabel || null,
           order_index: colIdx + 1,
