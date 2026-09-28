@@ -103,7 +103,6 @@ export function FormPlayer({ form }: FormPlayerProps) {
   const questions = activeTranslation ? activeTranslation.questions : ((form.questions as QuestionConfig[]) || [])
   const formTitle = activeTranslation ? activeTranslation.title : form.title
   const formDescription = activeTranslation ? activeTranslation.description : form.description
-  const badgeText = activeTranslation ? activeTranslation.badge : 'Pesquisa de TCC • PUC Minas • ~7 min'
 
   const handleLanguageChange = (newLang: SurveyLanguage) => {
     if (newLang === language) return
@@ -591,17 +590,7 @@ export function FormPlayer({ form }: FormPlayerProps) {
                 transition={{ duration: 0.3, ease: 'easeInOut' }}
                 className="space-y-6"
               >
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <div 
-                    className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold tracking-wide border"
-                    style={{
-                      borderColor: `${theme.primaryColor}40`,
-                      backgroundColor: `${theme.primaryColor}15`,
-                      color: theme.primaryColor,
-                    }}
-                  >
-                    {badgeText}
-                  </div>
+                <div className="flex items-center justify-center flex-wrap gap-3">
 
                   {/* Language switcher pill in welcome header */}
                   {isSurveyForm && (
